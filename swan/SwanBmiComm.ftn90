@@ -1,0 +1,2290 @@
+!!!!
+! This file contains the following subroutines:
+! * SwanGetThetisCouplingStatus(STATUS)
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetLastTimeStep(t_step_last)
+!
+!****************************************************************
+
+      USE SWCOMM3
+      IMPLICIT NONE
+
+      INTEGER, INTENT(OUT) :: t_step_last
+
+      t_step_last = MTC
+
+      RETURN
+      END
+
+
+!****************************************************************
+!
+      SUBROUTINE SwanSetLastTimeStep(t_step_last)
+!
+!****************************************************************
+!
+      USE OCPCOMM4, ONLY : ITMOPT
+      USE SWCOMM1, ONLY : CHTIME
+      USE SWCOMM3, ONLY : MTC
+      USE BMI_A, ONLY : TGT0, IT0, ITFNL
+      USE TIMECOMM, ONLY : DT, TIMCO
+      IMPLICIT NONE
+
+      INTEGER, INTENT(IN) :: t_step_last
+      CHARACTER DTTIWR*18
+
+      IF (.NOT. TGT0) THEN
+         MTC = t_step_last
+      ELSE
+         IT0 = MTC + 1
+         MTC = t_step_last
+         TIMCO = TIMCO + DT
+         CHTIME = DTTIWR(ITMOPT, TIMCO)
+      ENDIF
+      IF (MTC.GT.ITFNL) THEN
+         CALL MSGERR(4, "MTC exceeds SWAN's End time")
+      ENDIF
+
+
+      RETURN
+      END
+
+
+!****************************************************************
+!
+      SUBROUTINE InitialiseInputField(IGR1)
+!
+!****************************************************************
+!
+      USE SWCOMM2 ! VARWLV, MXG, MYG, IFLFAC, LEDS
+      USE SWCOMM3 ! ICUR
+      USE M_GENARR ! WLEVL, UXB, UYB
+      IMPLICIT NONE
+
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!  3. Method
+!  4. Argument variables
+!  5.
+!  6.
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+!
+      INTEGER, INTENT(IN) :: IGR1
+
+      ! For water level
+      IF (IGR1.EQ.7) THEN
+         ! Spatially varying water level
+         VARWLV = .TRUE.
+         IF (.NOT.ALLOCATED(WLEVL)) ALLOCATE(WLEVL(MXG(IGR1)*MYG(IGR1)))
+         WLEVL = 0.
+      ! Else if it is for the x-component of current velocities
+      ELSEIF (IGR1.EQ.2) THEN
+         ! Currents exist
+         ICUR = 1
+         IF (.NOT.ALLOCATED(UXB)) ALLOCATE(UXB(MXG(IGR1)*MYG(IGR1)))
+         UXB = 0.
+      ELSEIF (IGR1.EQ.3) THEN
+         IF (.NOT.ALLOCATED(UYB)) ALLOCATE(UYB(MXG(IGR1)*MYG(IGR1)))
+         UYB = 0.
+      ELSE
+         CALL MSGERR (2, 'Illegal IGR1')
+         RETURN
+      ENDIF
+
+
+      ! Multiplication factor [fac]
+      IFLFAC(IGR1) = 1.
+      ! Set the reading value to 2
+      LEDS(IGR1) = 2
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanSetInputField(TARR, ARRSIZE, FIELDNAME)
+!
+!****************************************************************
+!
+      USE SWCOMM2 !For the MXG
+      USE M_GENARR ! For the WLEVL
+      USE BMI_A
+      IMPLICIT NONE
+
+      CHARACTER, INTENT(IN) :: FIELDNAME*(*)
+      INTEGER, INTENT(IN) :: ARRSIZE
+      REAL, INTENT(IN), DIMENSION(ARRSIZE) :: TARR
+
+      IF (FIELDNAME=='sea_water_surface__elevation') THEN
+         WLEVL = TARR
+      ELSEIF (FIELDNAME=='sea_water_flow__x_component_of_velocity') THEN
+         UXB = TARR
+      ELSE
+         UYB = TARR
+      ENDIF
+
+      RETURN
+      END
+
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetInputFieldSize(igr1, grid_size)
+!
+!****************************************************************
+!
+      USE SWCOMM2, ONLY: MXG, MYG
+      IMPLICIT NONE
+!
+!  0. Authors
+!     BMI01.01: Anastasia K. Fragkou
+!
+!  1. Updates
+!     BMI01.01: Dec, 22 : The structured regular ‘version’ of SWAN is
+!       refactored to be able to be called from BMI. It also enables
+!       coupling with (1-way either direction, 2-way) with Thetis to ac-
+!       count for wave-current interaction effects
+!
+!  2. Purpose
+!     Get the array size of the specified input grid
+!
+!  3. Method
+!
+!  4. Modules used
+!     SWCOMM2
+!
+!  5. Argument variables
+!     igr1 [input] [integer] : Integer containing the internal SWAN grid
+!       /variable identifier
+!     grid_size [output] [integer] : Integer containing the array size
+      INTEGER, INTENT(IN) :: igr1
+      INTEGER, INTENT(OUT) :: grid_size
+!
+!  6. Parameter variables
+!      MXG [integer] : Number of meshes in x-direction
+!      MYG [integer] : Number of meshes in y-direction
+!
+!  7. Local variables
+!      ---
+!
+!  8. Subroutines and functions used
+!     ---
+!
+!  9. Subroutines and functions calling
+!     get_input_field_size (see m_swan.f90)
+!
+! 10. Error message
+!     ---
+!
+! 11. Remarks
+!     ---
+!
+! 12. Structure
+!     ---
+!
+! 13. Source text
+
+      grid_size = MXG(igr1)*MYG(igr1)
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanSetNextFieldValue(IGR1, IGR2, &
+                                       ARR, ARR2, &
+                                       JX1, JX2, JX3, &
+                                       JY1, JY2, JY3, &
+                                       COSFC, SINFC, &
+                                       COMPDA, &
+                                       XCGRID, YCGRID, &
+                                       KGRPNT, IERR)
+!
+!****************************************************************
+!
+!!!!!!!Needs to add the vector component
+      USE OCPCOMM4 !ITEST, PRTEST
+      USE SWCOMM2 !JWLV1, JWLV2, IFLTIM, IFLINT, MXG, MYG
+      USE SWCOMM3 !MCGRD, MCMVAR, MXC, MYC
+      USE TIMECOMM ! TIMCO, DT
+      IMPLICIT NONE
+
+      INTEGER :: INDX, IX, IY
+      INTEGER :: IGR1, IGR2, JX1, JX2, JX3, JY1, JY2, JY3
+      INTEGER :: IERR
+      INTEGER :: KGRPNT(MXC,MYC)
+      REAL :: COMPDA(MCGRD,MCMVAR)
+      REAL :: XCGRID(MXC,MYC), YCGRID(MXC,MYC)
+      REAL :: COSFC, SINFC
+      REAL*8 :: TIMR1, FAC
+      REAL, INTENT(IN) :: ARR(*), ARR2(*)
+      REAL :: XP, YP, UU, VV, VTOT, W3, W1
+      REAL :: SIZE1, SIZE2, SIZE3
+      REAL :: SVALQI
+
+      IERR = 0
+
+      !Pass the current values of input field to the old
+      DO INDX=1, MCGRD
+         COMPDA(INDX, JX1) = COMPDA(INDX, JX2)
+      ENDDO
+
+      ! If vector, IGR2>0, pass the current values of the y-component to the old
+      IF (IGR2.GT.1) THEN
+         DO INDX=1, MCGRD
+            COMPDA(INDX, JY1) = COMPDA(INDX, JY2)
+         ENDDO
+      ENDIF
+
+      ! DO something with times???
+      TIMR1 = TIMCO - DT
+ 200  IF (TIMCO.LE.IFLTIM(IGR1)) GOTO 400
+      TIMR1 = IFLTIM(IGR1)
+      IFLTIM(IGR1) = IFLTIM(IGR1) + IFLINT(IGR1)
+
+      ! If the compoutational time is bigger than the end reading time of the
+      ! input field
+      IF (IFLTIM(IGR1) .GT. IFLEND(IGR1)) THEN
+        IFLTIM(IGR1) = 1.E10
+        IF (IGR2.GT.0) IFLTIM(IGR2) = IFLTIM(IGR1)
+        GOTO 400
+      ENDIF
+
+      IF (IGR2.GT.0) THEN
+         IFLTIM(IGR2) = IFLTIM(IGR1)
+      ENDIF
+
+!     Interpolation over the computational grid
+!     structured grid
+      DO 230 IX = 1, MXC
+         DO 240 IY = 1, MYC
+            INDX = KGRPNT(IX, IY)
+            IF (INDX.GT.1) THEN
+               XP = XCGRID(IX,IY)
+               YP = YCGRID(IX, IY)
+               UU = SVALQI( XP, YP, IGR1, ARR, 0, IX, IY)
+               IF (IGR2.EQ.0) THEN
+                  COMPDA(INDX, JX3) = UU
+               ELSE
+                  VV = SVALQI(XP, YP, IGR2, ARR2, 0, IX, IY)
+                  COMPDA(INDX,JX3) = UU*COSFC+VV*SINFC
+                  COMPDA(INDX,JY3) = -UU*SINFC+VV*COSFC
+               ENDIF
+            ENDIF
+ 240     CONTINUE
+ 230  CONTINUE
+
+      GOTO 200
+!
+!         Interpolation in time
+!
+ 400  FAC = (TIMCO-TIMR1) / (IFLTIM(IGR1)-TIMR1)
+      W3 = REAL(FAC)
+      W1 = 1.-W3
+      DO 500 INDX = 1, MCGRD
+        UU = W1 * COMPDA(INDX,JX2) + W3 * COMPDA(INDX,JX3)
+        IF (IGR2.LE.0) THEN
+          COMPDA(INDX,JX2) = UU
+        ELSE
+          VV = W1 * COMPDA(INDX,JY2) + W3 * COMPDA(INDX,JY3)
+          VTOT = SQRT (UU*UU + VV*VV)
+!
+!         procedure to prevent loss of magnitude due to interpolation
+!
+          IF (VTOT.GT.0.) THEN
+            SIZE1 = SQRT(COMPDA(INDX,JX2)**2 + COMPDA(INDX,JY2)**2)
+            SIZE3 = SQRT(COMPDA(INDX,JX3)**2 + COMPDA(INDX,JY3)**2)
+            SIZE2 = W1*SIZE1 + W3*SIZE3
+!           SIZE2 is to be length of vector
+            COMPDA(INDX,JX2) = SIZE2*UU/VTOT
+            COMPDA(INDX,JY2) = SIZE2*VV/VTOT
+          ELSE
+            COMPDA(INDX,JX2) = UU
+            COMPDA(INDX,JY2) = VV
+          ENDIF
+        ENDIF
+ 500  CONTINUE
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetThetisGrid(NOMIP)
+!
+!****************************************************************
+!
+      USE MPI
+      USE M_PARALL, ONLY: MXF, MYF, INODE, IHALOX, LMXF, LMXL
+      USE M_PARALL, ONLY: LMYF, LMYL, IHALOY, PARLL, NPROC
+      USE M_PARALL, ONLY: MASTER, IAMMASTER, SWINT
+      USE OCPCOMM2, ONLY: FILENM
+      USE SWAN2THETIS
+      USE SWCOMM2, ONLY : XOFFS, YOFFS
+      USE SWCOMM3, ONLY: XCP, YCP, DX, DY, COSPC, SINPC, ONED
+      USE SWCOMM3, ONLY: MXC, MYC
+      USE SWCOMM4, ONLY: KREPTX
+      IMPLICIT NONE
+!
+!  0. Authors
+!     BMI01.01: Anastasia K. Fragkou
+!
+!  1. Updates
+!     BMI01.01: Dec, 22 : The structured regular ‘version’ of SWAN is
+!       refactored to be able to be called from BMI. It also enables
+!       coupling with (1-way either direction, 2-way) with Thetis to ac-
+!       count for wave-current interaction effects
+!
+!  2. Purpose
+!
+!  3. Method
+!
+!
+!  4. Modules used
+
+!  5. Argument variables
+!     NOMIP [output] [int] : NUmber of Thetis grid points
+      INTEGER, INTENT(OUT) :: NOMIP
+!
+!  6. Parameter variables (from the various modules)
+!     COSPC [real]      : cos(ALPC), where ALPC is the direction of user
+!       coordinates with respect to the computational coordinates
+!     DX [real]         : Mesh size in x-direction of computational grid
+!     DY [real]         : Mesh size in y-direction of computational grid
+!     FILENM [char*]    : The name of the file currently used for I/O
+!     IHALOX [integer]  : Width of halo area in x-direction
+!     IHALOY [integer]  : Width of halo area in y-direction
+!     INODE [integer]   : Rank of present node
+!     KREPTX [integer]  : If it is bigger than 0, the domain repeats it-
+!       self in x-direction
+!     LMXF [logical]    : Indicates whether the first x-point of the su-
+!       bdomain (in a paralll run) coincides with the first x-point of
+!       the global domain (.TRUE.) or not (.FALSE.)
+!     LMXL [logical]    : Indicates whether the last x-point of the sub-
+!       domain (in a parallel run) coincides with the last x-point of
+!       the global domain (.TRUE.) or not (.FALSE.)
+!     LMYF [logical]    : Indicates whether the first y-point of the su-
+!       bdomain (in a parallel run) coincides with the first y-point of
+!       the global domain (.TRUE.) or not (.FALSE.)
+!     LMYL [logical]    : Indicates whether the last y-point of the sub-
+!       domain (in a parallel run) coincides with the last y-point of
+!       the global domain (.TRUE.) or not (.FALSE.)
+!     MXC [integer]     : Grid points in x-direction of computational
+!       grid
+!     MXF [integer]     : First index with respect to global grid in x-
+!       direction
+!     MYC [integer]     : Grid points in y-direction of computational
+!       grid
+!     ONED [logical]    : Indicates whether the calculation should be
+!       performed in 1-D mode
+!     PARLL [logical]   : Indicates where the run is parallel (.TRUE.)
+!       or not (.FALSE.)
+!     SINPC [real]      : sin(ALPC), where ALPC is the direction of user
+!       coordinates with respect to the computational coordinates
+!     THINDXRNK(:) [int] : Contains the indices of the points per rank.
+!     THMIP [integer]   : The number of points in the 'Thetis' point set
+!       in other words, the number of the Thetis grid points
+!     THPRID(:) [integ] : The rank of the processor that contains the
+!       point in a parallel run. If the point is not included in a rank
+!       THPRID(*) = -999
+!     THPRMIP(:) [integer, Global] : Contains the number of points that
+!       each process has. It is the gathered array of all THPRMIPRNK, in
+!       other words, it is only available is rank 0
+!     THPRMIPRNK [integer] : The number of Thetis points per rank
+!     THPSNAME [char*6] : The name of the Thetis coordinates point set
+!     THPSTYPE [char]   : The type of the Thetis coordinates point set
+!       (it is P for POINTS)
+!     THXC(:) [real]    : The x-coordinates of the Thetis computational
+!       grid in the SWAN computational grid, i.e. the internal coordina-
+!       te system
+!     THXP(:) [real]    : The x-coordinates of the Thetis computational
+!       grid
+!     THXPOF(:) [real]  : The x-coordinates of the Thetis computational
+!       grid accounting for the difference/offset between the user and
+!       the internal coordinate system
+!     THYC(:) [real]    : The y-coordinates of the Thetis computational
+!       grid in the SWAN computational grid, i.e. the internal coordina-
+!       te system
+!     THYP(:) [real]    : The y-coordinates of the Thetis computational
+!       grid
+!     THYPOF(:) [real]  : The y-coordinates of the Thetis computational
+!       grid accounting for the difference/offset between the user and
+!       the internal coordinate system
+!     XCP [real]        : Origin of the user coordinates with respect to
+!       computational coordinates
+!     XOFFS [real]      : The offset value in x-direction, i.e. the dif-
+!       ference (user - internal) coordinate reference system
+!     YCP [real]        : Origin of the user coordinates with respect to
+!       computational coordinates
+!     YOFFS [real]      : The offset value in y-direction, i.e. the dif-
+!       ference (user - internal) coordinate reference system
+!
+!  7. Local variables
+!     IERR [integer]   :
+!     IO [integer]     : Indicates the successful or not 'reading' from
+!       a file
+!     IOSTAT [integer] : Indicates how the messages will be printed in
+!       the output file / screen
+!     IP [integer]     : Looping index
+!     IX [integer]     : x-coordinate of point in this rank
+!     IXB [integer]    : Start x-coordinate (index?) for this rank
+!     IXE [integer]    : End x-coordinates (index?) for this rank
+!     IY [integer]     : y-coordinate of point in this rank
+!     IYB [integer]    : Start y-coordinate (index?) for this rank
+!     IYE [integer]    : ENd y-coordinate (index?) for this rank
+!     JJ [integer]     : Looping index
+!     NDS [integer]    : Unit number for the file being opened/processed
+!     XP [double prec] : x-coordinate of Thetis grid as read from file
+!     YP [double prec] : y-coordinate of Thetis grid as read from file
+
+!     PSNAME : Name of the points defining Thetis grid
+!     THMIP : Number of points
+!     IOSTAT : Input/Output Status
+!     NDS : File reference number
+!     IERR
+!     IO
+!     XP, YP : Coordinates read from the file
+
+      INTEGER :: IERR, IO, IOSTAT, IP, IX, IXB, IXE, IY, IYB, IYE
+      INTEGER :: JJ, NDS
+      DOUBLE PRECISION :: XP, YP
+      INTEGER ::  ID
+      LOGICAL :: STPNOW
+      INTEGER :: STATS(MPI_STATUS_SIZE)
+      INTEGER :: PROC
+
+
+!
+!  7.  Local variables
+!      ---
+!
+!  8. Subroutines and functions used
+!     FOR
+!     MPI_BARRIER
+!     MPI_BCAST
+!     MPI_GATHER
+!
+!  9. Subroutines and functions calling
+!     ???
+!
+! 10. Error message
+!     ---
+!
+! 11. Remarks
+!     This subroutine relies heavily on how SWAN reads the Coordinates
+!     for output from a file (see command POINTS)
+!
+! 12. Structure
+!     ---
+!
+! 13. Source text
+
+      !
+      THPSNAME='Thetis'
+      THPSTYPE = 'P'
+
+      !! Get the number of Thetis points
+      ! Number of points for the Thetis type
+      THMIP  = 0
+      ! How the messages will be printed
+      IOSTAT = 0
+      ! The unit number for the file
+      NDS    = 0
+      ! The filepath of the Thetis coordinates
+      FILENM = './temp/coords.txt'
+
+      ! Open the file containing the Thetis coordinates
+      CALL FOR (NDS, FILENM, 'OF', IOSTAT)
+      ! Stop if any severe errors occurred
+      IF (STPNOW()) RETURN
+
+      ! Loop through file to get number of points
+      DO
+         ! Read a line from the file
+         READ(NDS,*,IOSTAT=IO)
+         ! If the 'reading' was unsuccessful, exit the loop
+         IF (IO.NE.0) EXIT
+         ! Update the Thetis grid points number
+         THMIP = THMIP + 1
+      END DO
+
+      ! Close file
+      CLOSE(NDS)
+
+
+      !! Allocate arrays relative to the Thetis grid points
+      ! Allocate x- and y-coordinates for Thetis grid
+      IF (.NOT. ALLOCATED(THXP)) ALLOCATE(THXP(THMIP))
+      IF (.NOT. ALLOCATED(THYP)) ALLOCATE(THYP(THMIP))
+      ! Allocate x- and y- offset from user coordinate system to inter-
+      ! nal coordinate system
+      IF (.NOT. ALLOCATED(THXPOF)) ALLOCATE(THXPOF(THMIP))
+      IF (.NOT. ALLOCATED(THYPOF)) ALLOCATE(THYPOF(THMIP))
+      ! Allocate arrays for x- and y- coordinates in SWAN computational
+      ! grid coordinates
+      IF (.NOT. ALLOCATED(THXC)) ALLOCATE(THXC(THMIP))
+      IF (.NOT. ALLOCATED(THYC)) ALLOCATE(THYC(THMIP))
+
+
+      !! Get the Thetis coordinates from the file
+      ! Reopen file
+      CALL FOR (NDS, FILENM, 'OF', IOSTAT)
+      ! Loop through the number of points
+      DO JJ=1, THMIP
+         IERR = 0
+         ! Read Thetis coordinates (XP, YP)
+         READ (NDS, *, IOSTAT=IO) XP, YP
+         ! Pass them to the appropriate arrays
+         THXP(JJ) = REAL(XP)
+         THYP(JJ) = REAL(YP)
+         ! Abstract the offset value for the user coordinate system to
+         ! the internal one
+         THXPOF(JJ) = THXP(JJ)-XOFFS
+         THYPOF(JJ) = THYP(JJ)-YOFFS
+         ! Convert them to SWAN computational coordinates
+         THXC(JJ) = (XCP+THXPOF(JJ)*COSPC+THYPOF(JJ)*SINPC)/DX
+         THXC(JJ) = THXC(JJ)-REAL(MXF)+1.
+
+         ! If the mesh repeats itself in the x-direction
+         IF (KREPTX.GT.0) THEN
+            THXC(JJ) = MODULO(THXC(JJ),REAL(MXC))
+         ENDIF
+
+         ! If the model is 1-D
+         IF (ONED) THEN
+            ! All the y-coordinates are zero
+            THYC(JJ) = 0.
+
+        ! If the model is 2-D
+         ELSE
+            ! Convert the y-coordinates of the Thetis grid to SWAN comp-
+            ! utational coordinates
+            THYC(JJ) = (YCP-THXPOF(JJ)*SINPC+THYPOF(JJ)*COSPC)/DY
+            THYC(JJ) = THYC(JJ)-REAL(MYF)+1.
+          ENDIF
+      ! Exit loop where we 'read' the Thetis coordinates
+      ENDDO
+
+      ! Number of coordinates points
+      NOMIP = THMIP
+
+
+      !! For parallel runs
+      ! Allocate and 'initialise' array with the default rank ID
+      ALLOCATE(THPRID(THMIP))
+      THPRID = -999
+
+      ! If we have a parallel run
+      IF (PARLL) THEN
+         ! Number of points per rank
+         THPRMIPRNK = 0
+
+         !! Calculate the start and end coordinates (indices?) per rank
+         ! Start x-coordinate
+         IXB = 1+IHALOX
+         ! Does it coincide with the global start x-coordinate?
+         IF ( LMXF ) IXB = 1
+
+         ! End x-coordinate
+         IXE = MXC-IHALOX
+         ! Does it coincide with the global end x-coordinate?
+         IF ( LMXL ) IXE = MXC
+
+         ! Start y-coordinate
+         IYB = 1+IHALOY
+         ! Does it coincide with the global start y-coordinate?
+         IF ( LMYF ) IYB = 1
+
+         ! End y-coordinate
+         IYE = MYC-IHALOY
+         ! Does it coincide with the global y-coordinate
+         IF ( LMYL ) IYE = MYC
+
+         !! Check if the "rank" coordinates of the points are within the
+         !! limits of the rank coordinates and pass them the rank into
+         !! the THPRID and update the counter for how may points are in
+         !! this rank
+         ! Loop through the Thetis grid points
+         DO IP=1, THMIP
+            ! Calculate the Thetis point coordinates in this rank
+            IX = NINT(THXC(IP)+100.) - 99
+            IY = NINT(THYC(IP)+100.) - 99
+            ! If this point is within this rank
+            IF ( IX.GE.IXB .AND. IX.LE.IXE .AND. &
+                IY.GE.IYB .AND. IY.LE.IYE ) THEN
+               ! Pass the rank ID
+               THPRID(IP) = INODE
+               ! Update the point counter
+               THPRMIPRNK = THPRMIPRNK + 1
+            ENDIF
+         ENDDO
+
+
+         !! Get the 'global' indices per rank
+         ! Allocate array which will contain the global indices of the
+         ! points in each rank. For example lets say we have the follow-
+         ! ing array: [5,10,15,20,25], and 3 processes. Process one has
+         ! the elements [5,15], process two the elements [10,25], and
+         ! process 3 the element [20]. Thus, THINDXRNK is [1,3] for Rank
+         ! 1, [2,5] for Rank 2, [4] for Rank 3
+         ALLOCATE(THINDXRNK(THPRMIPRNK))
+
+
+
+         ! Initialise counter for the points located in this process
+         JJ = 1
+         ! Loop through all the Thetis points
+         DO IP=1, THMIP
+            ! If teh point is in this process, add its index to the
+            ! THINDXRNK and update the counter JJ
+            IF (THPRID(IP).NE.-999) THEN
+              THINDXRNK(JJ) = IP
+              JJ = JJ + 1
+            ENDIF
+         ENDDO
+
+!        THPRMIP : Integer array containing the number of points that each pro-
+!                   cess has.
+!        THPRDSPL : Integer array containing the displacement of the elements
+!                   when stored in one array
+!        THINDX   : Integer array containing the order of points
+         ALLOCATE(THPRMIP(NPROC), THPRDSPL(NPROC))
+         ALLOCATE(THINDX(THMIP))
+
+         ! Assign the value -99 to this array (to help us if we request points
+         ! Outside of the domain
+         DO IP=1, THMIP
+            THINDX(IP) = -99
+         ENDDO
+
+!        Number of points per rank available to all processes
+         CALL MPI_GATHER(THPRMIPRNK, 1, SWINT, &
+                         THPRMIP, 1, SWINT, &
+                         MASTER-1, MPI_COMM_WORLD, IERR)
+         CALL MPI_BCAST(THPRMIP, NPROC, SWINT, 0, &
+                        MPI_COMM_WORLD, IERR)
+         CALL MPI_BARRIER(MPI_COMM_WORLD, IERR)
+
+!        Calculate the displacements
+         THPRDSPL(1)=0
+         DO JJ=2, NPROC
+            THPRDSPL(JJ) = THPRMIP(JJ-1) + THPRDSPL(JJ-1)
+         ENDDO
+
+!        Points' indices
+         CALL MPI_GATHERV(THINDXRNK, THPRMIPRNK, SWINT, &
+                          THINDX, THPRMIP, THPRDSPL, SWINT, &
+                          MASTER-1, MPI_COMM_WORLD, IERR)
+         CALL MPI_BCAST(THINDX, THMIP, SWINT, 0, &
+                        MPI_COMM_WORLD, IERR)
+         CALL MPI_BARRIER(MPI_COMM_WORLD, IERR)
+
+
+      ENDIF
+
+      RETURN
+      END
+
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetThetisCouplingStatus(STATUS)
+!
+!****************************************************************
+!
+      USE BMI_A, ONLY : THSWFC, TH2SW, SW2TH
+      IMPLICIT NONE
+!
+!  0. Authors
+!     BMI01.01: Anastasia K. Fragkou
+!
+!  1. Updates
+!     BMI01.01: Dec, 22 : The structured regular ‘version’ of SWAN is
+!       refactored to be able to be called from BMI. It also enables
+!       coupling with (1-way either direction, 2-way) with Thetis to ac-
+!       count for wave-current interaction effects
+!
+!  2. Purpose
+!     Get the coupling status between Thetis and SWAN. This can be one
+!     of the following:
+!     (1) Fully coupled;
+!     (2) Thetis-to-SWAN;
+!     (3) SWAN-to-Thetis;
+!     (4) No coupling
+!
+!  3. Method
+!     Check which, if any, of the logical variables determining the cou-
+!     pling status of the models is True
+!
+!  4. Modules used
+!     BMI_A
+!
+!  5. Argument variables
+!     STATUS [output] [char] : Character variable describing the coupl-
+!       ing with Thetis
+      CHARACTER, INTENT(OUT) :: STATUS*14
+!
+!  6. Parameter variables
+!      ---
+!
+!  7. Local variables
+!      ---
+!
+!  8. Subroutines and functions used
+!     ---
+!
+!  9. Subroutines and functions calling
+!     SWANINIT (see swanmain.ftn)
+!
+! 10. Error message
+!     ---
+!
+! 11. Remarks
+!     ---
+!
+! 12. Structure
+!     ---
+!
+! 13. Source text
+
+      ! If Thetis and SWAN are fully coupled
+      IF (THSWFC) THEN
+         STATUS = 'Fully coupled'
+
+      ! Else if the coupling is one-way from Thetis to SWAN, i.e. only
+      ! Thetis passes information to SWAN
+      ELSE IF (TH2SW) THEN
+         STATUS = 'Thetis-to-SWAN'
+
+      ! Else if the coupling is one-way from SWAN to Thetis, i.e. only
+      ! SWAN passes information to Thetis
+      ELSE IF (SW2TH) THEN
+         STATUS = 'SWAN-to-Thetis'
+
+      ! Else if Thetis and SWAN aren't coupled at all
+      ELSE
+         STATUS = 'No coupling'
+      END IF
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetGrid
+!
+!****************************************************************
+!
+      USE M_GENARR, ONLY : XCGRID, YCGRID
+      USE SWCOMM2, ONLY : XOFFS, YOFFS
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!     Get the minimum and maximum x- and y-coordinates of the
+!     computational grid points. This is just to test stuff
+!  3. Method
+!  4. Argument variables
+!  5.
+!  6.  Local variables
+      REAL :: MINX, MINY, MAXX, MAXY
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+
+      MINX = MINVAL(XCGRID)
+      MAXX = MAXVAL(XCGRID)
+      MINY = MINVAL(YCGRID)
+      MAXY = MAXVAL(YCGRID)
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanTimeProcessCoupling
+!
+!****************************************************************
+!
+      USE SWCOMM3, ONLY : NSTATM
+      USE TIMECOMM, ONLY : TFINC, TIMCO, TINIC, DT
+      USE M_PARALL, ONLY: PARLL
+      USE SWAN2THETIS, ONLY: THITMOP,THRQT, THDT, THPRRQT
+
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!     See if at this time, ther should be communication from SWAN
+!     to Thetis.
+!  3. Method
+!  4. Argument variables
+!  5.
+!  6.  Local variables
+!     DIF : Remaining time until the end of the simulation, in
+!           seconds
+!     TNEXT : Time of the next communication between SWAN and
+!             Thetis
+!     IXB, IXE
+
+      REAL*8 :: DIF, TNEXT
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+
+      ! If the simulation is non-stationary
+      IF (NSTATM.EQ.1) THEN
+         DIF = TFINC-TIMCO
+         ! If the start time for the communication from SWAN to
+         ! Thetis (THITMOP) is less than the start time of the
+         ! simulation (TINIC)
+         IF (THITMOP.LT.TINIC) THEN
+            TNEXT = TINIC
+         ELSE
+            TNEXT = THITMOP
+         ENDIF
+         IF ((PARLL).AND.(THRQT.EQ.-9999.)) THRQT = THITMOP
+         !
+         IF ((ABS(DIF).LT.0.5*DT).AND.(THDT.LT.0.)) THEN
+            ! The start time of the output request is the same as the start time
+            ! of the simulation
+            THITMOP = TIMCO
+            ! The output request will be processed
+            THPRRQT = .TRUE.
+         ELSE IF ((THDT.GT.0.).AND.(TIMCO.GE.TNEXT)) THEN
+            THITMOP = TNEXT + THDT
+            THPRRQT = .TRUE.
+         ELSE
+            THPRRQT = .FALSE.
+            RETURN
+         ENDIF
+
+      ELSE
+         ! aDD MESSAGE ERROR
+         PRINT *, "THE COUPLING SHOULD BE DONE IN NONSTAT"
+      ENDIF
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanToThetisOutput(AC2, KGRPNT, &
+                                    SPCDIR, SPCSIG,&
+                                    XCGRID, YCGRID)
+!
+!****************************************************************
+!
+      USE BMI_A, ONLY: COMPDA
+      USE MPI
+      USE SWAN2THETIS, ONLY: THPRRQT, &
+                            THMIP, THPRMIPRNK, THPRMIP, &
+                            THPRDSPL, THINDX, THINDXRNK, &
+                            THQB, THQBRNK, THQBMST, &
+                            THHS, THHSRNK, THHSMST, &
+                            THWLEN, THWLENRNK, THWLENMST, &
+                            THDIR, THDIRRNK, THDIRMST, &
+                            THXC, THYC, THXPOF, THYPOF, &
+                            THDEP
+      USE SWCOMM1, ONLY: OVEXCV
+      USE SWCOMM2, ONLY: OPTG
+      USE SWCOMM3, ONLY: JQB, JDP2, MXC, MYC, MDC, MSC, MCGRD, &
+                         MCMVAR
+      USE OCPCOMM4, ONLY: PRINTF, SCREEN
+      USE M_PARALL, ONLY: IAMMASTER, MASTER, INODE, NPROC, &
+                          PARLL,  SWREAL
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!  3. Method
+!  4. Argument variables
+      INTEGER, INTENT(IN) :: KGRPNT(MXC,MYC)
+      REAL, INTENT(IN) :: AC2(MDC,MSC,MCGRD), SPCSIG(MSC)
+      REAL, INTENT(IN) :: SPCDIR(MDC,6), XCGRID(MXC, MYC)
+      REAL, INTENT(IN) :: YCGRID(MXC,MYC)
+!  5.
+!  6.  Local variables
+
+      LOGICAL, ALLOCATABLE :: CROSS(:,:)
+      INTEGER :: IP, IERR
+
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+
+      ! Allocate array for Qb
+      IF (.NOT. ALLOCATED(THQB)) ALLOCATE(THQB(THMIP))
+      IF (.NOT. ALLOCATED(THDEP)) ALLOCATE(THDEP(THMIP))
+      ! Allocat HS array
+      IF (.NOT. ALLOCATED(THHS)) ALLOCATE(THHS(THMIP))
+      IF (.NOT. ALLOCATED(THDIR)) ALLOCATE(THDIR(THMIP))
+      IF (.NOT. ALLOCATED(THWLEN)) ALLOCATE(THWLEN(THMIP))
+
+      ! Zero out (to avoid having any extreme values, bc the Thetis point
+      ! is not part of the SWAN domain
+      DO IP=1, THMIP
+         THQB(IP) = 0.0
+         THHS(IP) = 0.0
+         THDIR(IP) = 0.0
+         THWLEN(IP) = 0.0
+      ENDDO
+
+
+
+      IF (PARLL) THEN
+!        Qb
+         IF (.NOT. ALLOCATED(THQBRNK)) ALLOCATE(THQBRNK(THPRMIPRNK))
+         IF (.NOT. ALLOCATED(THQBMST)) ALLOCATE(THQBMST(THMIP))
+!        Hs
+         IF (.NOT. ALLOCATED(THHSRNK)) ALLOCATE(THHSRNK(THPRMIPRNK))
+         IF (.NOT. ALLOCATED(THHSMST)) ALLOCATE(THHSMST(THMIP))
+!        Dir
+         IF (.NOT. ALLOCATED(THDIRRNK)) ALLOCATE(THDIRRNK(THPRMIPRNK))
+         IF (.NOT. ALLOCATED(THDIRMST)) ALLOCATE(THDIRMST(THMIP))
+!        Wlen
+         IF (.NOT. ALLOCATED(THWLENRNK)) ALLOCATE(THWLENRNK(THPRMIPRNK))
+         IF (.NOT. ALLOCATED(THWLENMST)) ALLOCATE(THWLENMST(THMIP))
+
+         CALL MPI_BARRIER(MPI_COMM_WORLD, IERR)
+      ENDIF
+
+      ! Get the time for the output request from Swan to Thetis
+      CALL SwanTimeProcessCoupling
+
+      ! If THLOCAT=.TRUE., i.e. if SWAN needs to export the relevant fields to
+      ! Thetis
+      IF (THPRRQT) THEN
+         ! Notify the user of inherent output request for Thetis
+         IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 15)
+ 15      FORMAT ('**SWAN is processing output request for Thetis')
+
+         ! Qb: IVTYPE = 8
+         ALLOCATE(CROSS(4,THMIP))
+
+         CALL SWOBSTO(XCGRID, YCGRID, THXPOF, THYPOF, THXC, &
+                      THYC, KGRPNT, CROSS, THMIP)
+
+         CALL SWIPOL(COMPDA(1, JQB), 0.0, THXC, THYC, &
+                     THMIP, CROSS, THQB, KGRPNT, COMPDA(1,JDP2))
+
+         ! Depth, IVTYPE = 4
+         CALL SWIPOL(COMPDA(1,JDP2), OVEXCV(4), THXC, THYC, &
+                    THMIP, CROSS, THDEP, KGRPNT, COMPDA(1,JDP2))
+
+         CALL SwanInterpolateOutputQuantities(AC2, CROSS, &
+                                            COMPDA(1,JDP2), &
+                                            KGRPNT, SPCDIR, &
+                                            SPCSIG, THXC, &
+                                            THYC)
+         DEALLOCATE(CROSS)
+
+
+
+
+
+
+         IF (PARLL) THEN
+            ! rESOLVE THE ISUE WITH NEGATIVE VALUES bY ASSIGNING THE VALUE 0.0
+            DO IP=1, THMIP
+               THQBMST(IP) = 0.0
+               THHSMST(IP) = 0.0
+               THDIRMST(IP) = 0.0
+               THWLENMST(IP) = 0.0
+            ENDDO
+            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
+
+            DO IP=1, THPRMIPRNK
+               THQBRNK(IP)=THQB(THINDXRNK(IP))
+               THHSRNK(IP)=THHS(THINDXRNK(IP))
+               THDIRRNK(IP)=THDIR(THINDXRNK(IP))
+               THWLENRNK(IP)=THWLEN(THINDXRNK(IP))
+            ENDDO
+
+            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
+
+            CALL MPI_GATHERV(THQBRNK, THPRMIPRNK, SWREAL, &
+                             THQBMST, THPRMIP, THPRDSPL, SWREAL, &
+                             MASTER-1, MPI_COMM_WORLD, IERR)
+            CALL MPI_BCAST(THQBMST, THMIP, SWREAL, MASTER-1, &
+                           MPI_COMM_WORLD, IERR)
+!           HS
+            CALL MPI_GATHERV(THHSRNK, THPRMIPRNK, SWREAL, &
+                             THHSMST, THPRMIP, THPRDSPL, SWREAL, &
+                             MASTER-1, MPI_COMM_WORLD, IERR)
+            CALL MPI_BCAST(THHSMST, THMIP, SWREAL, MASTER-1, &
+                           MPI_COMM_WORLD, IERR)
+!           Dir
+            CALL MPI_GATHERV(THDIRRNK, THPRMIPRNK, SWREAL, &
+                             THDIRMST, THPRMIP, THPRDSPL, SWREAL, &
+                             MASTER-1, MPI_COMM_WORLD, IERR)
+            CALL MPI_BCAST(THDIRMST, THMIP, SWREAL, MASTER-1, &
+                           MPI_COMM_WORLD, IERR)
+!           Wlen
+            CALL MPI_GATHERV(THWLENRNK, THPRMIPRNK, SWREAL, &
+                             THWLENMST, THPRMIP, THPRDSPL, SWREAL, &
+                             MASTER-1, MPI_COMM_WORLD, IERR)
+            CALL MPI_BCAST(THWLENMST, THMIP, SWREAL, MASTER-1, &
+                           MPI_COMM_WORLD, IERR)
+
+!            IF ((SCREEN.NE.PRINTF)) THEN
+!              WRITE(SCREEN, *) INODE,"TQB",MINVAL(THQBMST),MAXVAL(THQBMST)
+!              WRITE(SCREEN, *) INODE,"THS",MINVAL(THHSMST),MAXVAL(THHSMST)
+!              WRITE(SCREEN, *) INODE,"TDIR",MINVAL(THDIRMST),MAXVAL(THDIRMST)
+!              WRITE(SCREEN, *) INODE,"TWl",MINVAL(THWLENMST),MAXVAL(THWLENMST)
+!              WRITE(SCREEN, *) INODE,"T***************************"
+!            ENDIF
+!            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
+
+
+            ! Zero out (to avoid having any extreme values, bc the Thetis point
+            ! is not part of the SWAN domain
+            DO IP=1, THMIP
+               THQB(IP) = 0.0
+               THHS(IP) = 0.0
+               THDIR(IP) = 0.0
+               THWLEN(IP) = 0.0
+            ENDDO
+
+!           Reorder the points
+            DO IP=1, THMIP
+               IF (THINDX(IP) == -99) THEN
+                  THQB(THINDX(IP))=0.0
+                  THHS(THINDX(IP))=0.0
+                  THDIR(THINDX(IP))=0.0
+                  THWLEN(THINDX(IP))=0.0
+               ELSE
+                  THQB(THINDX(IP))=THQBMST(IP)
+                  THHS(THINDX(IP))=THHSMST(IP)
+                  THDIR(THINDX(IP))=THDIRMST(IP)
+                  THWLEN(THINDX(IP))=THWLENMST(IP)
+               ENDIF
+
+            ENDDO
+
+!            IF ((SCREEN.NE.PRINTF)) THEN
+!              WRITE(SCREEN, *) INODE,"QB",MINVAL(THQB),MAXVAL(THQB)
+!              WRITE(SCREEN, *) INODE,"HS",MINVAL(THHS),MAXVAL(THHS)
+!              WRITE(SCREEN, *) INODE,"DIR",MINVAL(THDIR),MAXVAL(THDIR)
+!              WRITE(SCREEN, *) INODE,"Wl",MINVAL(THWLEN),MAXVAL(THWLEN)
+!              WRITE(SCREEN, *) INODE,"***************************"
+!            ENDIF
+!            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
+
+            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
+
+         ENDIF
+      ENDIF
+
+
+
+
+      RETURN
+      END
+
+
+!****************************************************************
+!
+      SUBROUTINE SwanInterpolateOutputQuantities(AC2, CROSS, &
+                                                DEPXY, &
+                                                KGRPNT, SPCDIR,&
+                                                SPCSIG, THXC,&
+                                                THYC)
+!
+!****************************************************************
+!
+      USE OCPCOMM4, ONLY: SCREEN
+      USE SWAN2THETIS, ONLY: THMIP, THHS,THDIR,THWLEN,THDEP
+      USE SWCOMM1, ONLY: OUTPAR, OVEXCV
+      USE SWCOMM2, ONLY: OPTG
+      USE SWCOMM3, ONLY: MDC, MSC, MXC, MYC, JDP2, MCGRD, PWTAIL
+      USE SWCOMM3, ONLY: DDIR, PI2, BNAUT, PI, FRINTF, FRINTH
+      USE SWCOMM4, ONLY: KREPTX
+      USE MPI
+      USE M_PARALL, ONLY: IAMMASTER, MASTER, INODE, NPROC, &
+                          PARLL,  SWREAL
+
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!  3. Method
+!  4. Argument variables
+!     AC2 : Contains action density at present time step
+!     ACLOC : Contains spectrum for one output point
+!     CROSS :
+!     KGRPNT :
+!     SPCSIG : Relative frequencies in computational domain in sigma-space
+!     WK : Wavenumber in output point
+
+
+      REAL, INTENT(IN) :: AC2(MDC,MSC,MCGRD), DEPXY(MCGRD)
+      REAL, INTENT(IN) :: SPCDIR(MDC,6), THXC(THMIP)
+      REAL, INTENT(IN) :: THYC(THMIP)
+      REAL, INTENT(INOUT) :: SPCSIG(MSC)
+      LOGICAL, INTENT(INOUT) :: CROSS(4,THMIP)
+      INTEGER :: KGRPNT(MXC,MYC)
+!  5. Subroutines calling
+!  6.  Local variables
+!     EFTAIL : Coefficient for high frequency tail
+!     ETOT : Some moment of energy
+!     ID, IS, IP : Indices for the do-loops
+!     DS : Difference between relative differencies
+!     EAD : ?
+!     WRNSTR : String containing error message
+!     EXCPT : If .TRUE., the point is undefined
+!     EHFR : ?
+!     FMIN, FMAX : ?
+!     ECS : Cosine of spectral directions
+!     DEPLOC : Local depth at computational grid point
+!     CG : Group velocity
+!     N : Ratio of group to phase velocity
+!     ND : Derivative of N with respect to D
+!     EEX :
+!     EEY :
+!     EDI
+!     DIRDEG : Direction in degrees
+!     EKTOT :
+!     SIG2
+!     SKK :
+!     PPTAIL
+!     CETAIL
+!     CKTAIL
+!     WLMEAN
+
+      REAL, ALLOCATABLE :: ACLOC(:,:)
+      REAL :: ETOT, DS, EAD, EFTAIL, EHFR, FMIN, FMAX, ECS
+      REAL :: EEX, EEY, EDI, DIRDEG, EKTOT, SIG2, SKK
+      REAL :: PPTAIL, CETAIL, CKTAIL, WLMEAN
+      REAL :: DEPLOC
+      REAL :: WK(MSC), CG(MSC), NE(MSC), NED(MSC)
+      INTEGER :: ID, IS, IP, IERR
+      CHARACTER :: WRNSTR*44
+      LOGICAL :: EXCPT
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+
+      ! Allocate ACLOC
+      ALLOCATE(ACLOC(MDC,MSC))
+
+      ! Allocat HS array
+      IF (.NOT. ALLOCATED(THHS)) ALLOCATE(THHS(THMIP))
+      IF (.NOT. ALLOCATED(THDIR)) ALLOCATE(THDIR(THMIP))
+      IF (.NOT. ALLOCATED(THWLEN)) ALLOCATE(THWLEN(THMIP))
+
+
+      ! Calculation of wavenumber
+      DO IP=1, MCGRD
+        DEPLOC = DEPXY(IP)
+        CALL KSCIP1(MSC,SPCSIG,DEPLOC,WK,CG,NE,NED)
+      ENDDO
+
+
+
+      DO 800 IP=1, THMIP
+
+      ! For REGULAR grids
+      IF (OPTG.EQ.1) THEN
+         ! If the domain desn't repeat itself in x-direction
+         IF (KREPTX.EQ.0) THEN
+            IF (THXC(IP).LT.-0.01) GOTO 700
+            IF (THXC(IP).GT.REAL(MXC-1)+0.01) GOTO 700
+         ENDIF
+         ! Interpolate the local action density (ACLOC) from AC2
+
+         CALL SWOINABMI(THXC(IP),THYC(IP), AC2, ACLOC, KGRPNT, &
+                     DEPXY, CROSS(1:4,IP), EXCPT, IP)
+
+
+         IF (EXCPT) GOTO 700
+
+         ! Coefficient for high frequency tail
+         EFTAIL = 1./(PWTAIL(1)-1.)
+
+         ! For Hs, IVTYPE=10
+         IF (OUTPAR(6).EQ.0.) THEN
+            ETOT = 0.
+            ! Loop through "points" in theta-direction
+            DO ID=1, MDC
+               DO IS=2, MSC
+                  DS = SPCSIG(IS)-SPCSIG(IS-1)
+                  EAD = 0.5*(SPCSIG(IS)*ACLOC(ID,IS)+ &
+                       SPCSIG(IS-1)*ACLOC(ID,IS-1))*DS*DDIR
+                  ETOT=ETOT+EAD
+               ENDDO
+               IF (MSC.GT.3) THEN
+                  EHFR = ACLOC(ID,MSC)*SPCSIG(MSC)
+                  ETOT = ETOT+DDIR*EHFR*SPCSIG(MSC)*EFTAIL
+               ENDIF
+            ENDDO
+         ELSE
+            FMIN = PI2*OUTPAR(21)
+            FMAX = PI2*OUTPAR(36)
+            ECS = 1.
+            ETOT = SwanIntgratSpc(0., FMIN, FMAX, SPCSIG, &
+                                  SPCDIR(1,1), WK, ECS, 0., &
+                                  0., ACLOC, 1)
+         ENDIF
+         IF (ETOT.GE.0.) THEN
+            THHS(IP) = 4.*SQRT(ETOT)
+         ELSE
+            THHS(IP) = 0.
+         ENDIF
+
+         ! For Dir, IVTYPE = 13 (Mean wave direction)
+         IF (OUTPAR(8).EQ.0.) THEN
+            ! Integration over [0,inf]
+            ETOT = 0.
+            EEX = 0.
+            EEY = 0.
+            DO ID=1, MDC
+               EAD = 0.
+               DO IS=2, MSC
+                  DS=SPCSIG(IS)-SPCSIG(IS-1)
+                  EDI = 0.5*(SPCSIG(IS)*ACLOC(ID,IS)+ &
+                        SPCSIG(IS-1)*ACLOC(ID,IS-1))*DS
+                  EAD = EAD + EDI
+               ENDDO
+               IF (MSC .GT. 3) THEN
+                  ! Contribution of tail to tal energy density
+                  EHFR = ACLOC(ID,MSC) * SPCSIG(MSC)
+                  EAD = EAD + EHFR * SPCSIG(MSC) * EFTAIL
+               ENDIF
+               EAD = EAD * DDIR
+               ETOT = ETOT + EAD
+               EEX  = EEX + EAD * SPCDIR(ID,2)
+               EEY  = EEY + EAD * SPCDIR(ID,3)
+            ENDDO
+         ELSE
+            ! Integration over [fmin,fmax]
+            FMIN = PI2*OUTPAR(23)
+            FMAX = PI2*OUTPAR(38)
+            ECS = 1.
+            ETOT= SwanIntgratSpc(0. , FMIN, FMAX, SPCSIG, &
+                  SPCDIR(1,1), WK, ECS, 0. , 0. , ACLOC, 1)
+            EEX = SwanIntgratSpc(0., FMIN, FMAX, SPCSIG, &
+                  SPCDIR(1,1), WK, SPCDIR(1,2), 0., 0., &
+                  ACLOC, 1)
+            EEY = SwanIntgratSpc(0., FMIN, FMAX, SPCSIG, &
+                  SPCDIR(1,1), WK, SPCDIR(1,3), 0., 0., &
+                  ACLOC, 1)
+         ENDIF
+         IF (ETOT.GT.0.) THEN
+            IF (BNAUT) THEN
+               DIRDEG = ATAN2(EEY,EEX) * 180./PI
+            ELSE
+               DIRDEG = (ALCQ + ATAN2(EEY,EEX))*180./PI
+            ENDIF
+            IF (DIRDEG.LT.0.) DIRDEG = DIRDEG + 360.
+            ! Convert (if necessary) from nautical degrees to cartesian degrees
+            THDIR(IP) = DEGCNV(DIRDEG)
+         ELSE
+            THDIR(IP) = 0.0
+         ENDIF
+
+         ! Compute wavenumber (WK) and group velocity (Cg), based on output
+         ! point depth
+         DEPLOC = THDEP(IP)
+         CALL KSCIP1(MSC,SPCSIG,DEPLOC,WK,CG,NE,NED)
+
+         ! Wlen (Mean wavelength), IVTYPE = 17
+         IF (OUTPAR(11).EQ.0) THEN
+            ! Integration over [0, inf]
+            ETOT  = 0.
+            EKTOT = 0.
+            ! New integration method involving FRINTF
+            DO IS=1, MSC
+               SIG2 = (SPCSIG(IS))**2
+               SKK  = SIG2 * (WK(IS))**OUTPAR(3)
+               DO ID=1,MDC
+                  ETOT  = ETOT + SIG2 * ACLOC(ID,IS)
+                  EKTOT = EKTOT + SKK * ACLOC(ID,IS)
+               ENDDO
+            ENDDO
+            ETOT  = FRINTF * ETOT
+            EKTOT = FRINTF * EKTOT
+            IF (MSC .GT. 3) THEN
+               ! Contribution of tail to total energy density
+               PPTAIL = PWTAIL(1) - 1.
+               CETAIL = 1./(PPTAIL*(1.+PPTAIL*(FRINTH-1.)))
+               PPTAIL = PWTAIL(1) - 1. - 2.*OUTPAR(3)
+               IF (PPTAIL.LE.0.) THEN
+                  CALL MSGERR (2,'error tail computation')
+                  GOTO 480
+               ENDIF
+               CKTAIL = 1./(PPTAIL*(1.+PPTAIL*(FRINTH-1.)))
+               DO ID=1,MDC
+                  ETOT   = ETOT+CETAIL*SIG2*ACLOC(ID,MSC)
+                  EKTOT  = EKTOT+CKTAIL*SKK*ACLOC(ID,MSC)
+               ENDDO
+ 480           CONTINUE
+            ENDIF
+            IF (EKTOT.GT.0.) THEN
+               WLMEAN = PI2*(ETOT/EKTOT)**(1./OUTPAR(3))
+               THWLEN(IP) = WLMEAN
+            ELSE
+               THWLEN(IP) = 0.0
+            ENDIF
+         ELSE
+            ! Integration over [fmin,fmax]
+            FMIN = PI2*OUTPAR(26)
+            FMAX = PI2*OUTPAR(41)
+            ECS = 1.
+            ETOT  = SwanIntgratSpc(OUTPAR(3)-1., FMIN , FMAX, &
+                      SPCSIG, SPCDIR(1,1), WK, ECS, 0., 0., &
+                      ACLOC, 3)
+            EKTOT = SwanIntgratSpc(OUTPAR(3), FMIN , FMAX, &
+                      SPCSIG, SPCDIR(1,1), WK, ECS, 0., 0., &
+                      ACLOC, 3)
+            IF (EKTOT.GT.0.) THEN
+               WLMEAN = PI2 * ETOT / EKTOT
+               THWLEN(IP) = WLMEAN
+            ELSE
+               THWLEN(IP) = 0.0
+            ENDIF
+         ENDIF
+
+ 700      CONTINUE
+          IF (EXCPT) THEN
+             THHS(IP) = 0.0
+             THDIR(IP) = 0.0
+             THWLEN(IP) = 0.0
+          ENDIF
+
+           ! tHIS WAS ADDED BY ME (TO HANDLE THE OUTSIDE OF THE DOMAIN POINTS
+           ! BUT IT IS QRONG
+!          IF (THHS(IP) < 0.0) THEN
+!             THHS(IP) = 0.0
+!             THDIR(IP) = 0.0
+!             THWLEN(IP) = 0.0
+!          ENDIF
+
+
+      ! If the grid is CURVIlinear or UNSTRuctured
+      ELSE
+         WRNSTR="Thetis' coupling supports only REGULAR grids"
+         CALL MSGERR(2,WRNSTR)
+      ENDIF
+
+
+
+ 800  CONTINUE
+
+      DEALLOCATE(ACLOC)
+
+      RETURN
+      END
+
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetOutputField(FIELDNAME, DATA)
+!
+!****************************************************************
+!
+      USE SWAN2THETIS, ONLY:THHS, THQB, THDIR, THWLEN, THMIP
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!  3. Method
+!  4. Argument variables
+!     NAME [input] [char] : String of the name of the output field. It can be
+!                           one of the following:
+!                           'HS'   : for significant wave height
+!                           'DIR'  : for mean wave direction
+!                           'QB'   : for percentage of wave breaking
+!                           'WLEN' : for mean wavelength
+!     DATA [input/output] [real] : Array containing the values of the output
+!                                  variable
+      CHARACTER, INTENT(IN) :: FIELDNAME*(*)
+      REAL, INTENT(INOUT):: DATA(THMIP)
+!  5.
+!  6.  Local variables
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+
+      IF (FIELDNAME=='HS') THEN
+         DATA = THHS
+      ELSEIF (FIELDNAME=='DIR') THEN
+         DATA =THDIR
+      ELSEIF (FIELDNAME=='WLEN') THEN
+         DATA = THWLEN
+      ELSE
+         DATA = THQB
+      ENDIF
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanCompdaJQB(COMPDA)
+!
+!****************************************************************
+!
+      USE SWCOMM3, ONLY: MCGRD, MCMVAR, JQB
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!  3. Method
+!  4. Argument variables
+!     COMPDA
+      REAL, INTENT(INOUT):: COMPDA(MCGRD,MCMVAR)
+!  5.
+!  6.  Local variables
+      INTEGER :: IP, I1GRD, I2GRD
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+
+      CALL SWMTLB(1,MCGRD,I1GRD,I2GRD)
+
+      DO IP=I1GRD,I2GRD
+         COMPDA(IP,JQB)=0.
+      ENDDO
+
+      RETURN
+      END
+
+
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetCouplingTimestep(COUPL_DT)
+!
+!****************************************************************
+!
+      USE SWAN2THETIS, ONLY: THDT
+      USE SWCOMM2, ONLY: IFLINT
+      USE BMI_A, ONLY : THSWFC, TH2SW, SW2TH
+!  0. Authors
+!  1. Updates
+!  2. Purpose
+!  3. Method
+!  4. Argument variables
+!     COMPDA
+      REAL*8, INTENT(OUT):: COUPL_DT
+!  5.
+!  6.  Local variables
+!     COMMAND_DT : Timestep given in the COUPLING command
+!     WLEV_DT : Timestep specified in the INPGRID WLEV command
+!     CUR_DT : Timestep specified in the INPGRID CUR command
+      CHARACTER (LEN=49):: MSG1, MSG2, MSG3
+      CHARACTER (LEN=100)::MSG
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text
+
+!     Check the timestep for Two-way coupling
+      IF ((SW2TH).OR.(THSWFC)) THEN
+         COUPL_DT = THDT
+      ELSE IF (TH2SW) THEN
+         COUPL_DT = IFLINT(7)
+      ELSE
+         MSG1="SWAN is not coupled with Thetis. No coupling time"
+         MSG2="step variable exists"
+         MSG=MSG1//MSG2
+         CALL MSGERR(4,MSG)
+         COUPL_DT = -1.
+      END IF
+
+
+      RETURN
+      END
+
+
+!****************************************************************
+!
+      SUBROUTINE SwanCheckCouplingTimestep
+!
+!****************************************************************
+!
+      USE BMI_A, ONLY : THSWFC, TH2SW, SW2TH, COUPLING_DT
+      USE SWAN2THETIS, ONLY: THDT
+      USE SWCOMM2, ONLY: IFLINT
+      USE TIMECOMM, ONLY: DT
+!  0. Authors
+!     BMI01.01: Anastasia K. Fragkou
+!  1. Updates
+!     BMI01.01: Dec, 22 : The structured regular ‘version’ of SWAN is
+!       refactored to be able to be called from BMI. It also enables
+!       coupling with (1-way either direction, 2-way) with Thetis to ac-
+!       count for wave-current interaction effects
+!
+!  2. Purpose
+!     Get the value of the coupling timestep and perform the necessary
+!     checks depending on the coupling status. Once the coupling time-
+!     step has been determined, check if it is a multiple of the comput-
+!     ational timestep.
+!
+!  3. Method
+!     If the coupling is both ways
+!       Check that the WLEV and CUR have the same timestep, else termin-
+!       ate the simulation
+!       Check if the input fields have the same timestep with the one
+!       identified at the command COUPLING, else terminate SWAN
+!       Pass the value to COUPLING_DT
+!     Else if the coupling is from SWAN-to-Thetis
+!       Pass the value from the command COUPLING to COUPLING_DT
+!     Else if the coupling is from Thetis-to-SWAN
+!       Check that the WLEV and CUR have the same timestep, else termin-
+!       ate the simulation
+!       Pass the value to COUPLING_DT
+!     Else
+!       Terminate SWAN
+!       Pass the value of -1 to the COUPLING_DT
+!     End If
+!     If COUPLING_DT # -1 then
+!       Check if the remainder of (COUPLING_DT)/(COMPUTATIONAL_DT)=0. If
+!       it isn't terminate SWAN
+!     End If
+!
+!  4. Modules used
+!     BMI_A
+!     SWAN2THETIS
+!     SWCOMM2
+!     TIMECOMM
+!
+!  5. Argument variables
+!     ---
+!
+!  6. Parameter variables
+!     ---
+!
+!  7. Local variables
+!     MSG1, MSG2 : Character. Contains a segment of the error message
+!     MSG        : Character. Contains the whole error message
+!     REMAINDER  : Real*8. Contains the remainder of the division (coup-
+!                  ling timestep) over (computational timestep)
+      CHARACTER (LEN=49):: MSG1, MSG2
+      CHARACTER (LEN=100)::MSG
+      REAL*8 :: REMAINDER
+!
+!  8. Subroutines and functions used
+!     ---
+!
+!  9. Subroutines and functions calling
+!     SWANINIT (see swanmain.ftn)
+!
+! 10. Error message
+!     ---
+!
+! 11. Remarks
+!     ---
+!
+! 12. Structure
+!     See Method
+!
+! 13. Source text
+
+      ! If Thetis and SWAN are fully coupled
+      IF (THSWFC) THEN
+
+         ! If the timestep for the water level data, IFLINT(7), is not
+         ! equal to the timestep of the current velocities, terminate
+         ! the simulation
+         IF (IFLINT(7).NE.IFLINT(2)) THEN
+            ! Create the appropriate error message
+            MSG1='The timestep for WLEV and CUR are different. They'
+            MSG2=' should be the same when fully coupled'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4,MSG)
+         ! Close the If statement comparing the timesteps of WLEV and
+         ! CUR
+         END IF
+
+         ! If the timestep of the water levels (and subsequently of the
+         ! current velocities) is not equal to the coupling timestep,
+         ! terminate the simulation
+         IF (IFLINT(7).NE.THDT) THEN
+            ! Create the appropriate error message
+            MSG1='The timestep of the input fields does not match t'
+            MSG2='he one in command COUPLING for fully coupled'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4,MSG)
+         ! Close the if statement comparing the coupling timestep with
+         ! the timestep of WLEV
+         END IF
+
+         ! Pass the value of THDT to the coupling_dt, since the input
+         ! fields and the command COUPLING agree
+         COUPLING_DT = THDT
+
+      ! If the coupling is one-way from SWAN to Thetis, i.e. SWAN passes
+      ! information to Thetis
+      ELSE IF (SW2TH) THEN
+         ! The coupling timestep is the same as the one specified by the
+         ! command COUPLING, since no Input fields from Thetis are expe-
+         ! cted
+         COUPLING_DT = THDT
+
+      ! If the coupling is one-way from Thetis to SWAN, i.e. only Thetis
+      ! provides information
+      ELSE IF (TH2SW) THEN
+
+         ! If the timestep for the water level data, IFLINT(7), is not
+         ! equal to the timestep of the current velocities, terminate
+         ! the simulation
+         IF (IFLINT(7).NE.IFLINT(2)) THEN
+            ! Create the appropriate error message
+            MSG1='The timestep for WLEV and CUR are different. They'
+            MSG2=' should be the same when fully coupled'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4,MSG)
+         ! Close the If statement comparaing the timesteps of WLEV and
+         ! CUR
+         END IF
+
+         ! The coupling timestep is equal to the time-step of the input
+         ! fields WLEV and CUR
+         COUPLING_DT = IFLINT(7)
+
+      ! If no coupling is specified
+      ELSE
+
+         ! Create the appropriate error message
+         MSG1="SWAN is not coupled with Thetis. No coupling time"
+         MSG2="step variable exists"
+         ! Concatenate the error message segments
+         MSG=MSG1//MSG2
+         ! Produce the necessary error message, increase if necessary
+         ! the value of LEVERR and create/open an error file if
+         ! LEVERR is high enough
+         CALL MSGERR(4,MSG)
+
+         ! Pass as coupling timestep the value -1 (This shouldn't run)
+         COUPLING_DT = -1.
+
+      ! Close the if statement checking what kind of coupling exists
+      ! between Thetis and SWAN
+      END IF
+
+      ! If some coupling exists between SWAN and Thetis, check that the
+      ! coupling timestep is a multiple of the computational timestep
+      IF (COUPLING_DT/=-1.) THEN
+
+         ! Calculate the remainder of (coupling_dt/computational_dt)
+         REMAINDER = MOD(COUPLING_DT,DT)
+         ! If the remainder is not equal to zero, i.e. the coupling ti-
+         ! step is not a multiple of the computational one, terminate
+         ! SWAN
+         IF (REMAINDER/=0.) THEN
+            ! Create the appropriate error message
+            MSG1='The coupling timestep is not a multiple of the co'
+            MSG2='mputational timestep'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4, MSG)
+          ! Close the if statement checking if the remainder of the div-
+          ! ision is zero.
+         ENDIF
+
+      ! Close the if statement that check the validity of the coupling
+      ! timestep in regards to the computational one
+      ENDIF
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanGetSimulationTimes(T_START, &
+                                        T_END, &
+                                        T_DT)
+!
+!****************************************************************
+!
+      USE TIMECOMM, ONLY: TINIC, TFINC, DT
+!
+!  0. Authors
+!     BMI01.01: Anastasia K. Fragkou
+!
+!  1. Updates
+!     BMI01.01: Dec, 22 : The structured regular ‘version’ of SWAN is
+!       refactored to be able to be called from BMI. It also enables
+!       coupling with (1-way either direction, 2-way) with Thetis to ac-
+!       count for wave-current interaction effects
+!
+!  2. Purpose
+!     Make available the information about the start time, the end time
+!     and the timestep of the simulation to the BMI-SWAN
+!
+!  3. Method
+!     Assign the values to output variables
+!
+!  4. Modules used
+!     TIMECOMM
+!
+!  5. Argument variables
+!     T_START [output] [real] : Real variable containing the start time
+!        of the simulation
+!     T_END [output] [real]   : Real variable containing the end time of
+!        the simulation
+!     DT [output] [real]      : Real variable containing the timestep of
+!                               the simulation
+      REAL*8, INTENT(OUT) :: T_START, T_END, T_DT
+!
+!  6. Parameter variables
+!     ---
+!
+!  7. Local variables
+!     ---
+!
+!  8. Subroutines and functions used
+!     ---
+!
+!  9. Subroutines and functions calling
+!     get_simulation_times (see m_swan.f90)
+!
+! 10. Error message
+!     ---
+!
+! 11. Remarks
+!     ---
+!
+! 12. Structure
+!     ---
+!
+! 13. Source text
+
+      T_START = TINIC
+      T_END = TFINC
+      T_DT = DT
+
+      RETURN
+      END
+
+!****************************************************************
+!
+      SUBROUTINE SwanCheckStartEndTimes
+!
+!****************************************************************
+!
+      USE BMI_A, ONLY: THSWFC, SW2TH, TH2SW
+      USE SWAN2THETIS, ONLY: THITMOP
+      USE SWCOMM2, ONLY: IFLBEG, IFLEND
+      USE TIMECOMM, ONLY: TINIC, TFINC
+!
+!  0. Authors
+!     BMI01.01: Anastasia K. Fragkou
+!
+!  1. Updates
+!     BMI01.01: Dec, 22 : The structured regular ‘version’ of SWAN is
+!       refactored to be able to be called from BMI. It also enables
+!       coupling with (1-way either direction, 2-way) with Thetis to ac-
+!       count for wave-current interaction effects
+!
+!  2. Purpose
+!     Depending on the coupling status (one way, 2-way) check whether
+!     the coupling start time, the computing start time and the start
+!     times for the input fields currents and water elevation are the
+!     same
+!
+!  3. Method
+!     Compare the start and end times depending on the coupling status
+!
+!  4. Modules used
+!
+!  5. Argument variables
+!     ---
+!
+!  6. Parameter variables
+!     ---
+!
+!  7. Local variables
+!     MSG1, MSG2 : Character. Contains a segment of the error message
+!     MSG        : Character. Contains the whole error message
+      CHARACTER (LEN=49):: MSG1, MSG2
+      CHARACTER (LEN=100)::MSG
+!
+!  8. Subroutines and functions used
+!
+!  9. Subroutines and functions calling
+!     SWANINIT (see swanmain.ftn)
+!
+! 10. Error message
+!     ---
+!
+! 11. Remarks
+!     ---
+!
+! 12. Structure
+!
+!     If SWAN and Thetis are fully coupled, then
+!        If the start times of WLEV and CUR aren't the same,
+!           Terminate SWAN
+!        End If
+!        If the start time in the COUPLING command and WLEV aren't the
+!        same,
+!           Terminate SWAN
+!        End If
+!        If the start times in the COUPLING and COMPUTE command aren't
+!        the same,
+!           Terminate SWAN
+!        End If
+!        If the end times of WLEV and CUR aren't the same,
+!           Terminate SWAN
+!        End If
+!        If the end time of WLEV and COMPUTE command aren't the same
+!           Terminate SWAN
+!        End If
+!
+!     Else if SWAN is one-way coupled with Thetis (SWAN-to-Thetis),
+!        If the start times in the COUPLING and COMPUTE command aren't
+!        the same,
+!           Terminate SWAN
+!        End If
+!
+!     Else if Thetis is one-way coupled with SWAN (Thetis-to-SWAN),
+!        If the start times of WLEV and CUR aren't the same,
+!           Terminate SWAN
+!        End If
+!        If the end times of WLEV and CUR aren't the same,
+!           Terminate SWAN
+!        End If
+!        If the end time of WLEV and COMPUTE command aren't the same
+!           Terminate SWAN
+!        End If
+!        If the start times of WLEV and COMPUTE command aren't the same
+!           Terminate SWAN
+!        End If
+!
+!    End If
+!
+! 13. Source text
+
+      ! If Thetis and SWAN are fully coupled
+      IF (THSWFC) THEN
+
+         ! Check that the start time for WLEV and CUR are the same
+         IF (ABS(IFLBEG(7)-IFLBEG(2))>0.00001) THEN
+            ! Create the appropriate error message
+            MSG1='The start time for WLEV is different from the sta'
+            MSG2='rt time for CUR'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4,MSG)
+         ! Close the IF statement comparing the start times for WLEV
+         ! and CUR
+         END IF
+
+         ! Check that the start time in the COUPLING command is the same
+         ! as the start time of the WLEV and CUR
+         IF (ABS(THITMOP-IFLBEG(7))>0.00001) THEN
+            ! Create the appropriate error message
+            MSG1='The start time of the input fields does not match'
+            MSG2=' the start time of the command COUPLING'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4,MSG)
+          ! Close the IF statement comparing the start time of the COU-
+          ! PLING command and the start time of the input fields
+          END IF
+
+          ! Check if the start time defined in the COUPLING command is
+          ! the same as the start time of the computation, i.e. of the
+          ! COMPUTE command
+          IF (ABS(THITMOP-TINIC)>0.00001) THEN
+             ! Create the appropriate error message
+             MSG1='The start time of the command COUPLING does not m'
+             MSG2='atch the start time of the COMPUTE command'
+             ! Concatenate the error message segments
+             MSG=MSG1//MSG2
+             ! Produce the necessary error message, increase if necessary
+             ! the value of LEVERR and create/open an error file if
+             ! LEVERR is high enough
+             CALL MSGERR(4,MSG)
+          ! Close the IF statement comparing the start time of the COUP-
+          ! LING and COMPUTE command
+          ENDIF
+
+          ! Check that the end time for the WLEV and CUR are the same
+          IF (ABS(IFLEND(7)-IFLEND(2))>0.00001) THEN
+             ! Create the appropriate error message
+             MSG1='The end time for WLEV is different from the end '
+             MSG2='time for CUR'
+             ! Concatenate the error message segments
+             MSG=MSG1//MSG2
+             ! Produce the necessary error message, increase if necessary
+             ! the value of LEVERR and create/open an error file if
+             ! LEVERR is high enough
+             CALL MSGERR(4,MSG)
+           ! Close the IF statement comparing the end times of the WLEV
+           ! and CUR
+           END IF
+
+           ! Check that the end time of the input fields is the same as
+           ! the end time of the computation
+           IF (ABS(IFLEND(7)-TFINC)>0.00001) THEN
+              ! Create the appropriate error message
+              MSG1='The end time for the input fields does not matc'
+              MSG2='h the end time of the command COMPUTE'
+              ! Concatenate the error message segments
+              MSG=MSG1//MSG2
+              ! Produce the necessary error message, increase if necessary
+              ! the value of LEVERR and create/open an error file if
+              ! LEVERR is high enough
+              CALL MSGERR(4,MSG)
+           ! Close the IF statement that compares the end times of the
+           ! input fields and the COMPUTE command
+           ENDIF
+
+      ! If only SWAN provides information to Thetis (1-way coupling)
+      ELSE IF (SW2TH) THEN
+
+          ! Check if the start time defined in the COUPLING command is
+          ! the same as the start time of the computation, i.e. of the
+          ! COMPUTE command
+          IF (ABS(THITMOP-TINIC)>0.00001) THEN
+             ! Create the appropriate error message
+             MSG1='The start time of the command COUPLING does not m'
+             MSG2='atch the start time of the COMPUTE command'
+             ! Concatenate the error message segments
+             MSG=MSG1//MSG2
+             ! Produce the necessary error message, increase if necessary
+             ! the value of LEVERR and create/open an error file if
+             ! LEVERR is high enough
+             CALL MSGERR(4,MSG)
+          ! Close the IF statement comparing the start time of the COUP-
+          ! LING and COMPUTE command
+          ENDIF
+
+      ! If only Thetis provides information to SWAN, i.e. 1-way coupling
+      ELSE IF (TH2SW) THEN
+
+         ! Check that the start time for WLEV and CUR are the same
+         IF (ABS(IFLBEG(7)-IFLBEG(2))>0.00001) THEN
+            ! Create the appropriate error message
+            MSG1='The start time for WLEV is different from the sta'
+            MSG2='rt time for CUR'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4,MSG)
+         ! Close the IF statement comparing the start times for WLEV
+         ! and CUR
+         END IF
+
+         ! Check that the end time for the WLEV and CUR are the same
+         IF (ABS(IFLEND(7)-IFLEND(2))>0.00001) THEN
+            ! Create the appropriate error message
+            MSG1='The end time for WLEV is different from the end '
+            MSG2='time for CUR'
+            ! Concatenate the error message segments
+            MSG=MSG1//MSG2
+            ! Produce the necessary error message, increase if necessary
+            ! the value of LEVERR and create/open an error file if
+            ! LEVERR is high enough
+            CALL MSGERR(4,MSG)
+          ! Close the IF statement comparing the end times of the WLEV
+          ! and CUR
+          END IF
+
+          ! Check that the end time of the input fields is the same as
+          ! the end time of the computation
+          IF (ABS(IFLEND(7)-TFINC)>0.00001) THEN
+             ! Create the appropriate error message
+             MSG1='The end time for the input fields does not matc'
+             MSG2='h the end time of the command COMPUTE'
+             ! Concatenate the error message segments
+             MSG=MSG1//MSG2
+             ! Produce the necessary error message, increase if necessary
+             ! the value of LEVERR and create/open an error file if
+             ! LEVERR is high enough
+             CALL MSGERR(4,MSG)
+          ! Close the IF statement that compares the end times of the
+          ! input fields and the COMPUTE command
+          ENDIF
+
+          ! Check that the start time of the INPUT fields is the same as
+          ! the start time of the computation
+          IF (ABS(IFLBEG(7)-TINIC)>0.00001) THEN
+             ! Create the appropriate error message
+             MSG1='The start time of the command COUPLING does not m'
+             MSG2='atch the start time of the COMPUTE command'
+             ! Concatenate the error message segments
+             MSG=MSG1//MSG2
+             ! Produce the necessary error message, increase if necessary
+             ! the value of LEVERR and create/open an error file if
+             ! LEVERR is high enough
+             CALL MSGERR(4,MSG)
+          ! Close the IF statement comparing the start time of the input
+          ! fields and COMPUTE command
+          ENDIF
+
+      ! Close the IF statement assesing the coupling status between SWAN
+      ! and Thetis
+      END IF
+
+      RETURN
+      END
+
+!***********************************************************************
+!
+      SUBROUTINE SWOINABMI(XC, YC, AC2, ACLOC, KGRPNT, &
+                           DEPXY, CROSS, EXCPT, IP)
+!
+!***********************************************************************
+!
+      USE OCPCOMM4
+      USE SWCOMM3
+      USE SWCOMM4
+      USE MPI
+      USE M_PARALL, ONLY: INODE
+
+!  0. Authors
+!     30.72: IJsbrand Haagsma
+!     40.13: Nico Booij
+!     40.41: Marcel Zijlema
+!     40.86: Nico Booij
+!
+!  1. Updates
+!
+!     10.10, Aug. 94: separated from subr. SWOEXA
+!     30.50,        : If depth on one of the corners is negative value 0
+!                     is returned
+!     30.72, Sept 97: Replaced DO-block with one CONTINUE to DO-block with
+!                     two CONTINUE's
+!     40.13, Aug. 01: provision for repeating grid (KREPTX>0)
+!     40.41, Oct. 04: common blocks replaced by modules, include files removed
+!     40.86, Feb. 08: modification to prevent interpolation over an obstacle
+!
+!  2. Purpose
+!
+!       interpolates local action density ACLOC from array AC2
+!  3. Method
+
+!  4. Argument list
+!
+!       XC, YC  real   input    comp. grid coordinates
+!       AC2     real a input    action densities
+!       ACLOC   real a outp     local action density spectrum
+!
+!  5. SUBROUTINES CALLING
+!
+!       SWOEXA (SWAN/OUTP)
+!
+!  6.  Local variables
+
+!  7.
+!  8. Subroutines used
+!  9. Subroutines calling
+! 10. Error message
+! 11. Remarks
+! 12. Structure
+! 13. Source text!
+      LOGICAL :: EXCPT     ! if true value is undefined                   40.86
+      LOGICAL :: OUTSID ! If true, value is outside computational grid
+      LOGICAL :: CROSS(4)  ! true if obstacle is between output point     40.86
+                           ! and computational grid point                 40.86
+      REAL :: XC, YC, AC2(MDC,MSC,MCGRD), ACLOC(MDC, MSC)
+      REAL :: DEPXY(MCGRD)
+      INTEGER :: KGRPNT(MXC,MYC)
+!
+      REAL :: WW(1:4)    ! Interpolation weights for the 4 corners        40.86
+      REAL :: SUMWW      ! sum of the weights                             40.86
+      INTEGER :: INDX(1:4)     ! grid counters for the 4 corners          40.86
+      INTEGER :: JX(1:4), JY(1:4)  ! grid counters for the 4 corners      40.86
+      INTEGER :: JC            ! corner counter                           40.86
+      INTEGER :: IERR, IP
+      SAVE IENT
+      DATA IENT /0/
+      CALL STRACE (IENT, 'SWOINA')
+!
+!     If the point is outside the computational grid, give it the value of 0
+      IF ((XC.LE.-0.5).OR.(YC.LE.-0.5)) THEN
+         ACLOC = 0
+         JX1 = 0
+         JY1 = 0
+         JX2 = 0
+         JY2 = 0
+         SX1 = 0
+         SX2 = 0
+         INDX(1:4) = 0
+         EXCPT = .TRUE.
+      ENDIF
+!     Otherwise, the point is inside
+      EXCPT = .FALSE.
+      WW(1:4) = 0.
+      SUMWW = 0.
+      ACLOC = 0.
+      JX1 = INT(XC+3.) - 2
+      JX2 = JX1+1
+      SX2 = XC + 1. - FLOAT(JX1)
+      SX1 = 1. - SX2
+!     Added the following line
+      IF (JX1.LT.0) EXCPT = .FALSE.
+      IF (KREPTX .EQ. 0) THEN
+        IF (JX1.GT.MXC) EXCPT = .TRUE.
+        IF (JX1.EQ.MXC) JX2 = MXC
+        IF (JX1.EQ.0) JX1=1
+        IF (SX1.LT.0.01 .OR. JX1.EQ.0)   THEN
+          SX1 = 0.
+          SX2 = 1.
+          JX1 = MAX(1,JX1)
+        ENDIF
+        IF (SX2.LT.0.01 .OR. JX1.EQ.MXC) THEN
+          SX2 = 0.
+          SX1 = 1.
+          JX2 = MIN(MXC,JX2)
+        ENDIF
+      ELSE
+!       repeating grid
+        JX1 = 1 + MODULO (JX1-1, MXC)
+        JX2 = 1 + MODULO (JX2-1, MXC)
+      ENDIF
+!
+      IF (ONED) THEN
+        JY1 = 1
+        JY2 = 1
+        SY1 = 0.5
+        SY2 = 0.5
+      ELSE
+        JY1 = INT(YC+3.) - 2
+        JY2 = JY1+1
+        SY2 = YC + 1. - FLOAT(JY1)
+        SY1 = 1. - SY2
+        IF (JY1.LT.0) EXCPT=.TRUE.
+        IF (JY1.GT.MYC) EXCPT=.TRUE.
+        IF (JY1.EQ.MYC) JY2=MYC
+        IF (JY1.EQ.0) JY1=1
+        IF (SY1.LT.0.01 .OR. JY1.EQ.0) THEN
+          SY1 = 0.
+          SY2 = 1.
+          JY1 = MAX(1,JY1)
+        ENDIF
+        IF (SY2.LT.0.01 .OR. JY1.EQ.MYC) THEN
+          SY2 = 0.
+          SY1 = 1.
+          JY2 = MIN(MYC,JY2)
+        ENDIF
+      ENDIF
+!
+!      *** Using indirect addressing for AC2   ***
+!
+      DO 91 ISIGM = 1, MSC
+        DO 90 ID  = 1, MDC
+          ACLOC(ID,ISIGM) = 0.
+  90    CONTINUE
+  91  CONTINUE
+!
+      IF (.NOT.EXCPT) THEN
+         JX(1) = JX1
+         JY(1) = JY1
+         WW(1) = SX1*SY1
+         JX(2) = JX2
+         JY(2) = JY1
+         WW(2) = SX2*SY1
+         JX(3) = JX1
+         JY(3) = JY2
+         WW(3) = SX1*SY2
+         JX(4) = JX2
+         JY(4) = JY2
+         WW(4) = SX2*SY2
+         DO JC = 1, 4
+           INDX(JC) = KGRPNT(JX(JC),JY(JC))
+           IF (WW(JC).LT.0.01) THEN
+             WW(JC) = 0.
+           ELSE
+             IF (INDX(JC).LE.1) THEN
+               WW(JC) = 0.
+             ELSE IF (DEPXY(INDX(JC)).LE.DEPMIN) THEN
+!              dry point
+               EXCPT =  .TRUE.
+             ELSE IF (CROSS(JC) .AND. WW(JC).LT.0.999) THEN
+!              obstacle
+               WW(JC) = 0.
+             ENDIF
+           ENDIF
+         ENDDO
+         SUMWW = SUM(WW(1:4))
+         IF (.NOT.EXCPT) THEN
+           IF (SUMWW.GT.0.01) THEN
+             DO JC = 1, 4
+               IF (WW(JC).GT.1.E-6) THEN
+                 DO ISIGM = 1, MSC
+                   DO ID = 1, MDC
+                     ACLOC(ID,ISIGM) = ACLOC(ID,ISIGM) + &
+                             WW(JC)*AC2(ID,ISIGM,INDX(JC))
+                   ENDDO
+                 ENDDO
+               ENDIF
+             ENDDO
+             IF (SUMWW.LT.0.999999) THEN
+               DO ISIGM = 1, MSC
+                 DO ID = 1, MDC
+                   ACLOC(ID,ISIGM) = ACLOC(ID,ISIGM) / SUMWW
+                 ENDDO
+               ENDDO
+             ENDIF
+           ELSE
+             EXCPT =  .TRUE.
+           ENDIF
+         ENDIF
+      ENDIF
+ 80   CONTINUE
+      IF (ITEST.GE. 10) WRITE (PRTEST, 89) &
+         XC,YC,(JX(JC),JY(JC),WW(JC),INDX(JC),CROSS(JC),JC=1,4),&
+         SUMWW
+ 89   FORMAT (' SWOINA ',2F9.3,4(2X,2I5,F6.3,1X,I4,1X,L1),2X,&
+               F6.3)
+ 900  RETURN
+!     end of subroutine SWOINA
+      END

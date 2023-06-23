@@ -1025,6 +1025,8 @@
 !           --- update boundary conditions and input fields
 !
 !TIMG         CALL SWTSTA(7)                                                    40.23
+         IF (.NOT.ALLOCATED(UXB)) ALLOCATE(UXB(MXG(2)*MYG(2)))
+         IF (.NOT.ALLOCATED(UYB)) ALLOCATE(UYB(MXG(3)*MYG(3)))
          IF (.NOT.ALLOCATED(FRIC)) ALLOCATE(FRIC(MXG(4)*MYG(4)))
          IF (.NOT.ALLOCATED(NPLAF)) ALLOCATE(NPLAF(MXG(11)*MYG(11)))
          IF (.NOT.ALLOCATED(TURBF)) ALLOCATE(TURBF(MXG(12)*MYG(12)))
@@ -1194,8 +1196,10 @@
      &                 KGRPNT, XCGRID, YCGRID, OURQT )                     40.51 40.31
 !TIMG         CALL SWTSTO(9)                                                    40.30
          IF (STPNOW()) RETURN                                              40.30
-         CALL SwanToThetisOutput(AC2, KGRPNT, SPCDIR,
-     &     SPCSIG, XCGRID, YCGRID)
+         IF (THSWFC.OR.SW2TH) THEN
+            CALL SwanToThetisOutput(AC2, KGRPNT, SPCDIR,
+     &        SPCSIG, XCGRID, YCGRID)
+         ENDIF
 
 !
          IF (ERRPTS.GT.0) REWIND(ERRPTS)                                   30.50

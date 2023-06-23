@@ -3234,6 +3234,7 @@
 !
 !     process output requests                                             40.00
 !
+      IF (.NOT.ALLOCATED(WLEVL)) ALLOCATE(WLEVL(MXG(7)*MYG(7)))
       CALL SPROUT(FOUND, DEPTH, WLEVL)                                    40.31
       IF (STPNOW()) RETURN                                                34.01
       IF (.NOT.FOUND) THEN

@@ -1862,6 +1862,7 @@
         MYC    = MYCGL                                                    40.31
         MCGRD  = MCGRDGL                                                  40.31
         NGRBND = NGRBGL                                                   40.31
+        IF (.NOT.ALLOCATED(XYTST)) ALLOCATE(XYTST(0))
         CALL SWBOUN ( XGRDGL, YGRDGL, KGRPGL, XYTST, KGRBGL )             40.31
         IF (STPNOW()) RETURN                                              34.01
         MXC    = ITMP1                                                    40.31
@@ -5799,6 +5800,7 @@
 !
       INTEGER    KGRPNT(MXC,MYC)                                          40.00
       INTEGER JXMAX, JYMAX, NPTOT                                         40.80 40.62
+      INTEGER IX, IY, JX, JY, IINDX
       REAL       AC2(MDC,MSC,MCGRD)                                       40.31
       LOGICAL SINGLEHOT, PTNSUBGRD                                        40.62
       LOGICAL    KEYWIS, LERR                                             40.31 40.00

@@ -1,6 +1,6 @@
 include macros.inc
 
-FLAGS_BMI = -c -fPIC
+FLAGS_BMI = -c -fPIC -g -O0 -fbounds-check -fcheck=all
 TARGET = libswanmodel.so
 
 SWAN_OBJS = \

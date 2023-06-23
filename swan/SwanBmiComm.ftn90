@@ -998,7 +998,10 @@
 
 
 
+        IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 16)
+ 16      FORMAT ('**Finished with calculations')
 
+         CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
 
 
          IF (PARLL) THEN
@@ -1017,6 +1020,9 @@
                THDIRRNK(IP)=THDIR(THINDXRNK(IP))
                THWLENRNK(IP)=THWLEN(THINDXRNK(IP))
             ENDDO
+
+            IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 17)
+ 17         FORMAT ('**Before gathering and broadcasting')
 
             CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
 
@@ -1052,7 +1058,8 @@
 !              WRITE(SCREEN, *) INODE,"T***************************"
 !            ENDIF
 !            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
-
+             IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 18)
+ 18         FORMAT ('**After gathering and broadcasting')
 
             ! Zero out (to avoid having any extreme values, bc the Thetis point
             ! is not part of the SWAN domain
@@ -1063,14 +1070,16 @@
                THWLEN(IP) = 0.0
             ENDDO
 
+            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
+
 !           Reorder the points
             DO IP=1, THMIP
-               IF (THINDX(IP) == -99) THEN
-                  THQB(THINDX(IP))=0.0
-                  THHS(THINDX(IP))=0.0
-                  THDIR(THINDX(IP))=0.0
-                  THWLEN(THINDX(IP))=0.0
-               ELSE
+               IF (THINDX(IP).NE. -99) THEN
+!                  THQB(THINDX(IP))=0.0
+!                  THHS(THINDX(IP))=0.0
+!                  THDIR(THINDX(IP))=0.0
+!                  THWLEN(THINDX(IP))=0.0
+!               ELSE
                   THQB(THINDX(IP))=THQBMST(IP)
                   THHS(THINDX(IP))=THHSMST(IP)
                   THDIR(THINDX(IP))=THDIRMST(IP)
@@ -1078,6 +1087,7 @@
                ENDIF
 
             ENDDO
+
 
 !            IF ((SCREEN.NE.PRINTF)) THEN
 !              WRITE(SCREEN, *) INODE,"QB",MINVAL(THQB),MAXVAL(THQB)
@@ -1092,6 +1102,8 @@
 
          ENDIF
       ENDIF
+      IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 19)
+ 19   FORMAT ('**Fisnihed Thetis calculations')
 
 
 

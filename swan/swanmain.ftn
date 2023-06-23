@@ -1025,6 +1025,12 @@
 !           --- update boundary conditions and input fields
 !
 !TIMG         CALL SWTSTA(7)                                                    40.23
+         IF (.NOT.ALLOCATED(FRIC)) ALLOCATE(FRIC(MXG(4)*MYG(4)))
+         IF (.NOT.ALLOCATED(NPLAF)) ALLOCATE(NPLAF(MXG(11)*MYG(11)))
+         IF (.NOT.ALLOCATED(TURBF)) ALLOCATE(TURBF(MXG(12)*MYG(12)))
+         IF (.NOT.ALLOCATED(MUDLF)) ALLOCATE(MUDLF(MXG(13)*MYG(13)))
+         IF (.NOT.ALLOCATED(AICEF)) ALLOCATE(AICEF(MXG(14)*MYG(14)))
+         IF (.NOT.ALLOCATED(HICEF)) ALLOCATE(HICEF(MXG(15)*MYG(15)))
          CALL SNEXTI ( BSPECS, BGRIDP, COMPDA, AC1   , AC2   ,             40.31
      &                 SPCSIG, SPCDIR, XCGRID, YCGRID, KGRPNT,             40.31
      &                 XYTST , DEPTH , WLEVL , FRIC  , UXB   ,             40.31

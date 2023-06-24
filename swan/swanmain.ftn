@@ -428,6 +428,7 @@
       USE M_PARALL ! PARLL                                                       40.31
       USE SwanGriddata                                                    40.80
       USE BMI_A
+      USE MPI
 !PUN      USE MESSENGER                                                       40.95
 !ADC      USE Couple2Adcirc                                                   41.20
 !ADC      USE Couple2Swan, ONLY: ComputeRadiationStresses,                    41.20
@@ -441,6 +442,7 @@
       LOGICAL STPNOW                                                      40.30 34.01
 !NADC      LOGICAL   LOPEN                                                     34.01
 !NADC      REAL, ALLOCATABLE    :: BLKND(:), BLKNDC(:)                         40.51 40.41
+      INTEGER IERR
 
 
 
@@ -510,10 +512,13 @@
       IF ( PARLL ) THEN                                                    40.30
          ALLOCATE (BLKND(MXC*MYC))                                         40.51 40.41
          BLKND = REAL(INODE)                                               40.41
-         IF ( IAMMASTER ) THEN                                             40.95
-            ALLOCATE(BLKNDC(MXCGL*MYCGL))                                  40.51 40.41
-            BLKNDC = 0.                                                    40.96
-         END IF
+         ALLOCATE(BLKNDC(MXCGL*MYCGL))
+         BLKNDC(:) = 0.
+!         IF ( IAMMASTER ) THEN                                             40.95
+!            ALLOCATE(BLKNDC(MXCGL*MYCGL))                                  40.51 40.41
+!            BLKNDC(:) = 0.                                                    40.96
+!         END IF
+         CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
          CALL SWCOLLECT ( BLKNDC, BLKND, .TRUE. )                          40.51 40.41
          IF (STPNOW()) RETURN                                              40.41
          IF ( IAMMASTER ) THEN                                             40.95 40.30

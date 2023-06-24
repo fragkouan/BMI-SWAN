@@ -1020,10 +1020,12 @@
 !     --- if not parallel, return
       IF (.NOT.PARLL) RETURN
 
-      IF (IAMMASTER) THEN
-         ALLOCATE(ICOUNT(0:NPROC-1))
-         ALLOCATE(IDSPLC(0:NPROC-1))
-      END IF
+      ALLOCATE(ICOUNT(0:NPROC-1))
+      ALLOCATE(IDSPLC(0:NPROC-1))
+!      IF (IAMMASTER) THEN
+!         ALLOCATE(ICOUNT(0:NPROC-1))
+!         ALLOCATE(IDSPLC(0:NPROC-1))
+!      END IF
 
 !MPI!     --- gather the array sizes to the master
 !MPI
@@ -3798,16 +3800,25 @@
             IF (IAMMASTER) ALLOCATE(KGRPTC(0))
          END IF
 
-         IF (IAMMASTER) THEN
-            IF (FULL) THEN
-               ILEN = MXCGL*MYCGL +
-     &                       4*MAX(IHALOX,IHALOY)*NPROC*MAX(MXCGL,MYCGL)
-            ELSE
-               ILEN = MCGRDGL +
-     &                       4*MAX(IHALOX,IHALOY)*NPROC*MAX(MXCGL,MYCGL)
-            END IF
-            ALLOCATE(FLDC(ILEN))
+         IF (FULL) THEN
+            ILEN = MXCGL*MYCGL +
+     &             4*MAX(IHALOX,IHALOY)*NPROC*MAX(MXCGL,MYCGL)
+         ELSE
+            ILEN = MCGRDGL +
+     &             4*MAX(IHALOX,IHALOY)*NPROC*MAX(MXCGL,MYCGL)
          END IF
+         ALLOCATE(FLDC(ILEN))
+
+!         IF (IAMMASTER) THEN
+!            IF (FULL) THEN
+!               ILEN = MXCGL*MYCGL +
+!     &                       4*MAX(IHALOX,IHALOY)*NPROC*MAX(MXCGL,MYCGL)
+!            ELSE
+!               ILEN = MCGRDGL +
+!     &                       4*MAX(IHALOX,IHALOY)*NPROC*MAX(MXCGL,MYCGL)
+!            END IF
+!            ALLOCATE(FLDC(ILEN))
+!         END IF
          IF (FULL) THEN
             ILEN2 = MXC*MYC
          ELSE

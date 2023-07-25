@@ -28,7 +28,7 @@ The instructions provided here are for an installation directory that is not the
  c. make compile <br>
  d. cd ../ <br>
 
-**C. Create BMI-SWAN library and its Python package"
+**C. Create BMI-SWAN library and its Python package**
  
  a. cd ./bmi-swan && mkdir _build && cd _build <br>
  b. Change the paths in the CMakeLists (3 paths should be changed, the one in find_library <path>/myenv/local/lib, the other in find_path <path>/myenv/local/include, and the SWAN find library) <br>

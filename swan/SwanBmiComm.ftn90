@@ -998,8 +998,8 @@
 
 
 
-        IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 16)
- 16      FORMAT ('**Finished with calculations')
+!        IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 16)
+! 16      FORMAT ('**Finished with calculations')
 
          CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
 
@@ -1021,8 +1021,8 @@
                THWLENRNK(IP)=THWLEN(THINDXRNK(IP))
             ENDDO
 
-            IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 17)
- 17         FORMAT ('**Before gathering and broadcasting')
+!            IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 17)
+! 17         FORMAT ('**Before gathering and broadcasting')
 
             CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
 
@@ -1058,8 +1058,8 @@
 !              WRITE(SCREEN, *) INODE,"T***************************"
 !            ENDIF
 !            CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
-             IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 18)
- 18         FORMAT ('**After gathering and broadcasting')
+!             IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 18)
+! 18         FORMAT ('**After gathering and broadcasting')
 
             ! Zero out (to avoid having any extreme values, bc the Thetis point
             ! is not part of the SWAN domain
@@ -1102,8 +1102,8 @@
 
          ENDIF
       ENDIF
-      IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 19)
- 19   FORMAT ('**Fisnihed Thetis calculations')
+!      IF ((SCREEN.NE.PRINTF).AND.IAMMASTER) WRITE(SCREEN, 19)
+! 19   FORMAT ('**Fisnihed Thetis calculations')
 
 
 

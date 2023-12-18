@@ -6,14 +6,14 @@ set(bmiswan_lib bmiswan)
 
 # Locate the installed BMI bindings
 find_library(bmif_lib bmif
-	PATHS /mnt/sentinel/anastasia/myenv/local/lib)
+	PATHS /home/s2006658/myenv/local/lib)
 find_path(bmif_inc bmif_2_0.mod
-	PATHS /mnt/sentinel/anastasia/myenv/local/include)
+	PATHS /home/s2006658/myenv/local/include)
 include_directories(${bmif_inc})
 
 # Locate the SWAN library
 find_library(swan_lib swanmodel
-PATHS /mnt/sentinel/anastasia/bmi_swan_typhon/swan)
+PATHS /home/s2006658/Dropbox/bitbucket_repo/bmi_swan_atropos/swan)
 set(EXTRA_LIBS
   ${bmif_lib}
   ${swan_lib}

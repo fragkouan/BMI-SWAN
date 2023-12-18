@@ -8,8 +8,8 @@ import numpy
 # os.environ["CXX"] = "gcc"
 
 
-bmi_lib = '/mnt/sentinel/anastasia/myenv/local/lib'
-swan_lib = '/mnt/sentinel/anastasia/bmi_swan_typhon/swan'
+bmi_lib = '/home/s2006658/myenv/local/lib'
+swan_lib = '/home/s2006658/Dropbox/bitbucket_repo/bmi_swan_atropos/swan'
 
 class custom_build_ext(build_ext):
     def build_extensions(self):
@@ -30,7 +30,7 @@ ext_modules = [
         libraries=[ 'swanmodel', 'bmif', 'bmiswan'],
         library_dirs = [bmi_lib, swan_lib],
         runtime_library_dirs = [bmi_lib],
-        include_dirs = ['./', '/usr/local/include', '/mnt/sentinel/anastasia/myenv/local/include',
+        include_dirs = ['./', '/usr/local/include', '/home/s2006658/myenv/local/include',
             numpy.get_include() ],#
         extra_objects = ['bmi_interoperability.o'],
         language = 'c'

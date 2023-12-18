@@ -1,5 +1,5 @@
-BMI_LIB = /mnt/sentinel/anastasia/myenv/local/lib
-BMI_INC = /mnt/sentinel/anastasia/myenv/local/include
+BMI_LIB = /home/s2006658/myenv/local/lib
+BMI_INC = /home/s2006658/myenv/local/include
 FC = mpif90
 CC = gcc 
 CFLAGS = -c -fPIC -g -O0 -I. -I${BMI_INC}

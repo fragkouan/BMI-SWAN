@@ -99,7 +99,7 @@
    character (len=BMI_MAX_VAR_NAME), target, &
        dimension(output_item_count) :: &
        output_items =(/ &
-       'sea_surface_water_wave__significant_height', &
+       'sea_surface_water_wave__height            ', &
        'sea_surface_water_wave__direction         ', &
        'sea_surface_water_wave__wavelength        ', &
        'sea_surface_water_wave__breaking_fraction ', &
@@ -384,8 +384,8 @@
      grid = 2
      bmi_status = BMI_SUCCESS
 
-   ! If name = Hs (significant wave height)
-   case('sea_surface_water_wave__significant_height')
+   ! If name = Hs (wave height)
+   case('sea_surface_water_wave__height')
      grid = 101
      bmi_status = BMI_SUCCESS
 
@@ -628,7 +628,7 @@
    case("sea_water_surface__elevation", &
         "sea_water_flow__x_component_of_velocity", &
         "sea_water_flow__y_component_of_velocity", &
-        'sea_surface_water_wave__significant_height', &
+        'sea_surface_water_wave__height            ', &
         'sea_surface_water_wave__direction         ', &
         'sea_surface_water_wave__wavelength        ', &
         'sea_surface_water_wave__breaking_fraction ')

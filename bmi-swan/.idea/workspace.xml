@@ -1,7 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="b504c9b7-f7a8-4db7-b9de-3c36f4e51298" name="Changes" comment="" />
+    <list default="true" id="b504c9b7-f7a8-4db7-b9de-3c36f4e51298" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/src/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bmi_swan.f90" beforeDir="false" afterPath="$PROJECT_DIR$/src/bmi_swan.f90" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/m_swan.f90" beforeDir="false" afterPath="$PROJECT_DIR$/src/m_swan.f90" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/setup.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/setup.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../create_bmi_swan.sh" beforeDir="false" afterPath="$PROJECT_DIR$/../create_bmi_swan.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../remove_bmi_installation.sh" beforeDir="false" afterPath="$PROJECT_DIR$/../remove_bmi_installation.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../swan/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/../swan/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../swan/SwanBmiComm.ftn90" beforeDir="false" afterPath="$PROJECT_DIR$/../swan/SwanBmiComm.ftn90" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../swan/swanmain.ftn" beforeDir="false" afterPath="$PROJECT_DIR$/../swan/swanmain.ftn" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../swan/swanparll.ftn" beforeDir="false" afterPath="$PROJECT_DIR$/../swan/swanparll.ftn" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../swan/swanpre1.ftn" beforeDir="false" afterPath="$PROJECT_DIR$/../swan/swanpre1.ftn" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../swan/swmod2.ftn" beforeDir="false" afterPath="$PROJECT_DIR$/../swan/swmod2.ftn" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../swan4131.tar.gz" beforeDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -10,6 +28,10 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "customColor": "",
+  "associatedIndex": 0
+}]]></component>
   <component name="ProjectId" id="2EfqCNKP6A2pqt6pdRtKvF02Q9q" />
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectViewState">
@@ -20,9 +42,16 @@
   "keyToString": {
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
-    "last_opened_file_path": "/home/s2006658/Dropbox/bitbucket_repo/bmi_swan"
+    "last_opened_file_path": "/home/s2006658/Dropbox/bitbucket_repo/bmi_swan_atropos/bmi-swan"
   }
 }]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-7a29c1521ef0-d3b881c8e49f-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-233.11799.298" />
+      </set>
+    </attachedChunks>
+  </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">

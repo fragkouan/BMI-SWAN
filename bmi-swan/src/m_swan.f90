@@ -215,7 +215,7 @@
     real, intent(inout) :: dest(:)
 
 
-    if (name=='sea_surface_water_wave__significant_height') then
+    if (name=='sea_surface_water_wave__height') then
       call SwanGetOutputField("HS", dest)
     else if (name=='sea_surface_water_wave__direction') then
       call SwanGetOutputField("DIR", dest)
